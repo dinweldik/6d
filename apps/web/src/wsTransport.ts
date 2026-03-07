@@ -23,6 +23,32 @@ interface WsRequestEnvelope {
   };
 }
 
+function normalizeWsUrlForPage(input: string): string {
+  if (typeof window === "undefined") {
+    return input;
+  }
+
+  try {
+    const parsed = new URL(input, window.location.origin);
+    if (window.location.protocol === "https:" && parsed.protocol === "ws:") {
+      parsed.protocol = "wss:";
+    } else if (window.location.protocol === "http:" && parsed.protocol === "wss:") {
+      parsed.protocol = "ws:";
+    }
+    return parsed.toString();
+  } catch {
+    return input;
+  }
+}
+
+function defaultWsUrl(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}`;
+}
+
 export class WsTransport {
   private ws: WebSocket | null = null;
   private nextId = 1;
@@ -38,13 +64,14 @@ export class WsTransport {
     // In dev mode, VITE_WS_URL points to the server's WebSocket endpoint.
     // In production, the page is served by the WS server on the same host:port.
     const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-    this.url =
+    const candidate =
       url ??
       (bridgeUrl && bridgeUrl.length > 0
         ? bridgeUrl
         : envUrl && envUrl.length > 0
           ? envUrl
-          : `ws://${window.location.hostname}:${window.location.port}`);
+          : defaultWsUrl());
+    this.url = normalizeWsUrlForPage(candidate);
     this.connect();
   }
 

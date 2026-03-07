@@ -15,9 +15,11 @@ class MockWebSocket {
 
   readyState = MockWebSocket.CONNECTING;
   readonly sent: string[] = [];
+  readonly url: string;
   private readonly listeners = new Map<WsEventType, Set<WsListener>>();
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    this.url = url;
     sockets.push(this);
   }
 
@@ -70,7 +72,7 @@ beforeEach(() => {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
-      location: { hostname: "localhost", port: "3020" },
+      location: { protocol: "http:", host: "localhost:3020", hostname: "localhost", port: "3020" },
       desktopBridge: undefined,
     },
   });
@@ -170,6 +172,22 @@ describe("WsTransport", () => {
       raw: '{"type":"push","channel":42,"data":{"bad":true}}',
     });
 
+    transport.dispose();
+  });
+
+  it("upgrades insecure ws URL fallback to wss when page is HTTPS", () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        location: { protocol: "https:", host: "example.ts.net", hostname: "example.ts.net", port: "" },
+        desktopBridge: undefined,
+      },
+    });
+
+    const transport = new WsTransport();
+    const socket = getSocket();
+
+    expect(socket.url).toBe("wss://example.ts.net/");
     transport.dispose();
   });
 });
