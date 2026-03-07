@@ -1,6 +1,9 @@
 import {
+  ArrowUpIcon,
   ChevronRightIcon,
+  FileIcon,
   FolderIcon,
+  FolderPlusIcon,
   GitPullRequestIcon,
   RocketIcon,
   SquarePenIcon,
@@ -31,6 +34,7 @@ import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { type DraftThreadEnvMode, useComposerDraftStore } from "../composerDraftStore";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
+import { onServerWelcome } from "../wsNativeApi";
 import { toastManager } from "./ui/toast";
 import {
   getDesktopUpdateActionError,
@@ -42,7 +46,19 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "./ui/dialog";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { ScrollArea } from "./ui/scroll-area";
 import {
   SidebarContent,
   SidebarFooter,
@@ -79,6 +95,12 @@ function formatRelativeTime(iso: string): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+function basenameOfPath(input: string): string {
+  const trimmed = input.replace(/[/\\]+$/, "");
+  const segments = trimmed.split(/[/\\]/).filter(isNonEmptyString);
+  return segments.at(-1) ?? input;
 }
 
 interface ThreadStatusPill {
@@ -285,9 +307,11 @@ export default function Sidebar() {
   const queryClient = useQueryClient();
   const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const [addingProject, setAddingProject] = useState(false);
-  const [newCwd, setNewCwd] = useState("");
   const [isPickingFolder, setIsPickingFolder] = useState(false);
   const [isAddingProject, setIsAddingProject] = useState(false);
+  const [projectBrowserRootPath, setProjectBrowserRootPath] = useState<string | null>(null);
+  const [projectBrowserCurrentPath, setProjectBrowserCurrentPath] = useState<string | null>(null);
+  const [newProjectFolderName, setNewProjectFolderName] = useState("");
   const [renamingThreadId, setRenamingThreadId] = useState<ThreadId | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
   const [expandedThreadListsByProject, setExpandedThreadListsByProject] = useState<
@@ -354,6 +378,34 @@ export default function Sidebar() {
     }
     return map;
   }, [threadGitStatusCwds, threadGitStatusQueries, threadGitTargets]);
+  const projectBrowserQuery = useQuery({
+    queryKey: ["projects", "browse-directory", projectBrowserRootPath, projectBrowserCurrentPath],
+    queryFn: async () => {
+      const api = readNativeApi();
+      if (!api || !projectBrowserRootPath || !projectBrowserCurrentPath) {
+        throw new Error("Project browser is unavailable.");
+      }
+      return api.projects.browseDirectory({
+        rootPath: projectBrowserRootPath,
+        directoryPath: projectBrowserCurrentPath,
+      });
+    },
+    enabled:
+      addingProject && projectBrowserRootPath !== null && projectBrowserCurrentPath !== null,
+  });
+  const createProjectDirectoryMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const api = readNativeApi();
+      if (!api || !projectBrowserRootPath || !projectBrowserCurrentPath) {
+        throw new Error("Project browser is unavailable.");
+      }
+      return api.projects.createDirectory({
+        rootPath: projectBrowserRootPath,
+        parentPath: projectBrowserCurrentPath,
+        name,
+      });
+    },
+  });
 
   const openPrLink = useCallback((event: React.MouseEvent<HTMLElement>, prUrl: string) => {
     event.preventDefault();
@@ -374,6 +426,13 @@ export default function Sidebar() {
         title: "Unable to open PR link",
         description: error instanceof Error ? error.message : "An error occurred.",
       });
+    });
+  }, []);
+
+  useEffect(() => {
+    return onServerWelcome((payload) => {
+      setProjectBrowserRootPath((current) => current ?? payload.cwd);
+      setProjectBrowserCurrentPath((current) => current ?? payload.cwd);
     });
   }, []);
 
@@ -480,7 +539,8 @@ export default function Sidebar() {
       setIsAddingProject(true);
       const finishAddingProject = () => {
         setIsAddingProject(false);
-        setNewCwd("");
+        setNewProjectFolderName("");
+        setProjectBrowserCurrentPath(projectBrowserRootPath);
         setAddingProject(false);
       };
 
@@ -493,7 +553,7 @@ export default function Sidebar() {
 
       const projectId = newProjectId();
       const createdAt = new Date().toISOString();
-      const title = cwd.split(/[/\\]/).findLast(isNonEmptyString) ?? cwd;
+      const title = basenameOfPath(cwd);
       try {
         await api.orchestration.dispatchCommand({
           type: "project.create",
@@ -517,12 +577,14 @@ export default function Sidebar() {
       }
       finishAddingProject();
     },
-    [focusMostRecentThreadForProject, handleNewThread, isAddingProject, projects],
+    [
+      focusMostRecentThreadForProject,
+      handleNewThread,
+      isAddingProject,
+      projectBrowserRootPath,
+      projects,
+    ],
   );
-
-  const handleAddProject = () => {
-    void addProjectFromPath(newCwd);
-  };
 
   const handlePickFolder = async () => {
     const api = readNativeApi();
@@ -539,6 +601,52 @@ export default function Sidebar() {
     }
     setIsPickingFolder(false);
   };
+
+  const openProjectBrowser = useCallback(() => {
+    setNewProjectFolderName("");
+    setProjectBrowserCurrentPath(projectBrowserRootPath);
+    setAddingProject(true);
+  }, [projectBrowserRootPath]);
+
+  const handleProjectBrowserOpenChange = useCallback(
+    (open: boolean) => {
+      setAddingProject(open);
+      if (!open) {
+        setNewProjectFolderName("");
+        setProjectBrowserCurrentPath(projectBrowserRootPath);
+        return;
+      }
+      setProjectBrowserCurrentPath(projectBrowserRootPath);
+    },
+    [projectBrowserRootPath],
+  );
+
+  const handleCreateProjectFolder = useCallback(async () => {
+    const folderName = newProjectFolderName.trim();
+    if (!folderName || createProjectDirectoryMutation.isPending) {
+      return;
+    }
+    try {
+      const result = await createProjectDirectoryMutation.mutateAsync(folderName);
+      setNewProjectFolderName("");
+      setProjectBrowserCurrentPath(result.path);
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", "browse-directory", projectBrowserRootPath],
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Unable to create folder",
+        description:
+          error instanceof Error ? error.message : "An error occurred while creating the folder.",
+      });
+    }
+  }, [
+    createProjectDirectoryMutation,
+    newProjectFolderName,
+    projectBrowserRootPath,
+    queryClient,
+  ]);
 
   const cancelRename = useCallback(() => {
     setRenamingThreadId(null);
@@ -969,6 +1077,11 @@ export default function Sidebar() {
       return next;
     });
   }, []);
+  const projectBrowserDirectoryPath =
+    projectBrowserQuery.data?.directoryPath ?? projectBrowserCurrentPath;
+  const projectBrowserParentPath = projectBrowserQuery.data?.parentPath ?? null;
+  const projectBrowserEntries = projectBrowserQuery.data?.entries ?? [];
+  const isCreatingProjectFolder = createProjectDirectoryMutation.isPending;
 
   const wordmark = (
     <div className="flex items-center gap-2">
@@ -1287,59 +1400,157 @@ export default function Sidebar() {
 
       <SidebarSeparator />
       <SidebarFooter className="gap-0 p-3">
-        {addingProject ? (
-          <>
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-              Add project
-            </p>
-            <input
-              className="mb-2 w-full rounded-md border border-border bg-secondary px-2 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
-              placeholder="/path/to/project"
-              value={newCwd}
-              onChange={(event) => setNewCwd(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") handleAddProject();
-                if (event.key === "Escape") setAddingProject(false);
-              }}
-            />
-            {isElectron && (
-              <button
-                type="button"
-                className="mb-2 flex w-full items-center justify-center rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => void handlePickFolder()}
-                disabled={isPickingFolder || isAddingProject}
-              >
-                {isPickingFolder ? "Picking folder..." : "Browse for folder"}
-              </button>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary/90"
-                onClick={handleAddProject}
-                disabled={isAddingProject}
-              >
-                {isAddingProject ? "Adding..." : "Add"}
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground/80 transition-colors duration-150 hover:bg-secondary"
-                onClick={() => setAddingProject(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
-            onClick={() => setAddingProject(true)}
-          >
-            + Add project
-          </button>
-        )}
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
+          onClick={openProjectBrowser}
+        >
+          + Add project
+        </button>
       </SidebarFooter>
+
+      <Dialog open={addingProject} onOpenChange={handleProjectBrowserOpenChange}>
+        <DialogPopup className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add project</DialogTitle>
+            <DialogDescription>
+              Browse folders under the server cwd and pick one as the project root.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel className="space-y-4">
+            <div className="rounded-xl border border-border bg-muted/30">
+              <div className="border-b border-border px-4 py-3">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+                  <FolderIcon className="size-3.5" />
+                  <span>Current folder</span>
+                </div>
+                <p className="mt-2 break-all font-mono text-xs text-foreground/90">
+                  {projectBrowserDirectoryPath ?? projectBrowserRootPath ?? "Waiting for server..."}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (!projectBrowserParentPath) return;
+                      setProjectBrowserCurrentPath(projectBrowserParentPath);
+                    }}
+                    disabled={!projectBrowserParentPath || projectBrowserQuery.isLoading}
+                  >
+                    <ArrowUpIcon className="size-4" />
+                    Up
+                  </Button>
+                  {isElectron && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handlePickFolder()}
+                      disabled={isPickingFolder || isAddingProject}
+                    >
+                      {isPickingFolder ? "Picking outside cwd..." : "Pick outside cwd"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <ScrollArea className="h-72">
+                {!projectBrowserRootPath ? (
+                  <div className="px-4 py-6 text-sm text-muted-foreground">
+                    Waiting for the server cwd.
+                  </div>
+                ) : projectBrowserQuery.isLoading ? (
+                  <div className="px-4 py-6 text-sm text-muted-foreground">Loading folders...</div>
+                ) : projectBrowserQuery.isError ? (
+                  <div className="px-4 py-6 text-sm text-destructive">
+                    {projectBrowserQuery.error instanceof Error
+                      ? projectBrowserQuery.error.message
+                      : "Unable to load folder contents."}
+                  </div>
+                ) : projectBrowserEntries.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-muted-foreground">
+                    This folder is empty.
+                  </div>
+                ) : (
+                  <div className="p-2">
+                    {projectBrowserEntries.map((entry) =>
+                      entry.kind === "directory" ? (
+                        <button
+                          key={entry.path}
+                          type="button"
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                          onClick={() => setProjectBrowserCurrentPath(entry.path)}
+                        >
+                          <FolderIcon className="size-4 shrink-0 text-muted-foreground/80" />
+                          <span className="min-w-0 flex-1 truncate text-foreground">
+                            {entry.name}
+                          </span>
+                          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/60" />
+                        </button>
+                      ) : (
+                        <div
+                          key={entry.path}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground/75"
+                        >
+                          <FileIcon className="size-4 shrink-0 text-muted-foreground/65" />
+                          <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+                <FolderPlusIcon className="size-4" />
+                <span>Create folder here</span>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Input
+                  placeholder="New folder name"
+                  value={newProjectFolderName}
+                  onChange={(event) => setNewProjectFolderName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleCreateProjectFolder();
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => void handleCreateProjectFolder()}
+                  disabled={
+                    !projectBrowserDirectoryPath ||
+                    newProjectFolderName.trim().length === 0 ||
+                    isCreatingProjectFolder
+                  }
+                >
+                  {isCreatingProjectFolder ? "Creating..." : "Create folder"}
+                </Button>
+              </div>
+            </div>
+          </DialogPanel>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => handleProjectBrowserOpenChange(false)}
+              disabled={isAddingProject}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void addProjectFromPath(projectBrowserDirectoryPath ?? "")}
+              disabled={!projectBrowserDirectoryPath || projectBrowserQuery.isLoading || isAddingProject}
+            >
+              {isAddingProject
+                ? "Adding..."
+                : `Use ${projectBrowserDirectoryPath ? basenameOfPath(projectBrowserDirectoryPath) : "folder"}`}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </>
   );
 }

@@ -153,6 +153,37 @@ function toPosixRelativePath(input: string): string {
   return input.replaceAll("\\", "/");
 }
 
+function resolvePathWithinRoot(params: {
+  rootPath: string;
+  targetPath?: string;
+  path: Path.Path;
+}): Effect.Effect<{ absoluteRootPath: string; absolutePath: string; relativePath: string }, RouteRequestError> {
+  const absoluteRootPath = params.path.resolve(params.rootPath);
+  const normalizedTargetPath = params.targetPath?.trim();
+  const absolutePath =
+    normalizedTargetPath && normalizedTargetPath.length > 0
+      ? params.path.resolve(absoluteRootPath, normalizedTargetPath)
+      : absoluteRootPath;
+  const relativeToRoot = toPosixRelativePath(params.path.relative(absoluteRootPath, absolutePath));
+  if (
+    relativeToRoot === ".." ||
+    relativeToRoot.startsWith("../") ||
+    params.path.isAbsolute(relativeToRoot)
+  ) {
+    return Effect.fail(
+      new RouteRequestError({
+        message: "Workspace path must stay within the project root.",
+      }),
+    );
+  }
+
+  return Effect.succeed({
+    absoluteRootPath,
+    absolutePath,
+    relativePath: relativeToRoot === "." ? "" : relativeToRoot,
+  });
+}
+
 function resolveWorkspaceWritePath(params: {
   workspaceRoot: string;
   relativePath: string;
@@ -189,6 +220,10 @@ function resolveWorkspaceWritePath(params: {
     absolutePath,
     relativePath: relativeToRoot,
   });
+}
+
+function isValidDirectoryName(name: string): boolean {
+  return name !== "." && name !== ".." && !/[\\/]/.test(name) && !name.includes("\u0000");
 }
 
 function stripRequestTag<T extends { _tag: string }>(body: T) {
@@ -768,6 +803,128 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               message: `Failed to search workspace entries: ${String(cause)}`,
             }),
         });
+      }
+
+      case WS_METHODS.projectsBrowseDirectory: {
+        const body = stripRequestTag(request.body);
+        const target = yield* resolvePathWithinRoot({
+          rootPath: body.rootPath,
+          ...(body.directoryPath ? { targetPath: body.directoryPath } : {}),
+          path,
+        });
+        const directoryInfo = yield* fileSystem.stat(target.absolutePath).pipe(
+          Effect.mapError(
+            () =>
+              new RouteRequestError({
+                message: "Unable to open folder.",
+              }),
+          ),
+        );
+        if (directoryInfo.type !== "Directory") {
+          return yield* new RouteRequestError({
+            message: "Selected path is not a folder.",
+          });
+        }
+        const rawEntries = yield* fileSystem.readDirectory(target.absolutePath, {
+          recursive: false,
+        }).pipe(
+          Effect.mapError(
+            () =>
+              new RouteRequestError({
+                message: "Unable to read folder contents.",
+              }),
+          ),
+        );
+        const entries = yield* Effect.forEach(
+          rawEntries,
+          (entry) =>
+            Effect.gen(function* () {
+              const normalizedName = entry.replace(/^[/\\]+/, "").replace(/\\/g, "/");
+              if (
+                normalizedName.length === 0 ||
+                normalizedName.includes("/") ||
+                normalizedName === "." ||
+                normalizedName === ".."
+              ) {
+                return null;
+              }
+              const absoluteEntryPath = path.join(target.absolutePath, normalizedName);
+              const entryInfo = yield* fileSystem
+                .stat(absoluteEntryPath)
+                .pipe(Effect.catch(() => Effect.succeed(null)));
+              if (!entryInfo) {
+                return null;
+              }
+              if (entryInfo.type === "Directory") {
+                return {
+                  name: normalizedName,
+                  path: absoluteEntryPath,
+                  kind: "directory" as const,
+                };
+              }
+              if (entryInfo.type === "File") {
+                return {
+                  name: normalizedName,
+                  path: absoluteEntryPath,
+                  kind: "file" as const,
+                };
+              }
+              return null;
+            }),
+          { concurrency: 8 },
+        ).pipe(Effect.map((items) => items.filter((entry) => entry !== null)));
+        return {
+          rootPath: target.absoluteRootPath,
+          directoryPath: target.absolutePath,
+          parentPath: target.relativePath.length === 0 ? null : path.dirname(target.absolutePath),
+          entries: entries.toSorted((left, right) => {
+            if (left.kind !== right.kind) {
+              return left.kind === "directory" ? -1 : 1;
+            }
+            return left.name.localeCompare(right.name);
+          }),
+        };
+      }
+
+      case WS_METHODS.projectsCreateDirectory: {
+        const body = stripRequestTag(request.body);
+        if (!isValidDirectoryName(body.name)) {
+          return yield* new RouteRequestError({
+            message: "Folder name cannot contain path separators.",
+          });
+        }
+        const parent = yield* resolvePathWithinRoot({
+          rootPath: body.rootPath,
+          targetPath: body.parentPath,
+          path,
+        });
+        const parentInfo = yield* fileSystem.stat(parent.absolutePath).pipe(
+          Effect.mapError(
+            () =>
+              new RouteRequestError({
+                message: "Parent folder does not exist.",
+              }),
+          ),
+        );
+        if (parentInfo.type !== "Directory") {
+          return yield* new RouteRequestError({
+            message: "Parent path is not a folder.",
+          });
+        }
+        const target = yield* resolvePathWithinRoot({
+          rootPath: body.rootPath,
+          targetPath: path.join(parent.absolutePath, body.name),
+          path,
+        });
+        yield* fileSystem.makeDirectory(target.absolutePath, { recursive: false }).pipe(
+          Effect.mapError(
+            () =>
+              new RouteRequestError({
+                message: `Unable to create folder "${body.name}".`,
+              }),
+          ),
+        );
+        return { path: target.absolutePath };
       }
 
       case WS_METHODS.projectsWriteFile: {

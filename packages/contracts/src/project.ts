@@ -3,6 +3,7 @@ import { PositiveInt, TrimmedNonEmptyString } from "./baseSchemas";
 
 const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
 const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
+const PROJECT_DIRECTORY_NAME_MAX_LENGTH = 255;
 
 export const ProjectSearchEntriesInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
@@ -25,6 +26,39 @@ export const ProjectSearchEntriesResult = Schema.Struct({
   truncated: Schema.Boolean,
 });
 export type ProjectSearchEntriesResult = typeof ProjectSearchEntriesResult.Type;
+
+export const ProjectBrowseDirectoryInput = Schema.Struct({
+  rootPath: TrimmedNonEmptyString,
+  directoryPath: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProjectBrowseDirectoryInput = typeof ProjectBrowseDirectoryInput.Type;
+
+export const ProjectBrowseDirectoryEntry = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+  kind: ProjectEntryKind,
+});
+export type ProjectBrowseDirectoryEntry = typeof ProjectBrowseDirectoryEntry.Type;
+
+export const ProjectBrowseDirectoryResult = Schema.Struct({
+  rootPath: TrimmedNonEmptyString,
+  directoryPath: TrimmedNonEmptyString,
+  parentPath: Schema.NullOr(TrimmedNonEmptyString),
+  entries: Schema.Array(ProjectBrowseDirectoryEntry),
+});
+export type ProjectBrowseDirectoryResult = typeof ProjectBrowseDirectoryResult.Type;
+
+export const ProjectCreateDirectoryInput = Schema.Struct({
+  rootPath: TrimmedNonEmptyString,
+  parentPath: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_DIRECTORY_NAME_MAX_LENGTH)),
+});
+export type ProjectCreateDirectoryInput = typeof ProjectCreateDirectoryInput.Type;
+
+export const ProjectCreateDirectoryResult = Schema.Struct({
+  path: TrimmedNonEmptyString,
+});
+export type ProjectCreateDirectoryResult = typeof ProjectCreateDirectoryResult.Type;
 
 export const ProjectWriteFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,

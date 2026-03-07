@@ -140,6 +140,8 @@ export function createWsNativeApi(): NativeApi {
         }),
     },
     projects: {
+      browseDirectory: (input) => transport.request(WS_METHODS.projectsBrowseDirectory, input),
+      createDirectory: (input) => transport.request(WS_METHODS.projectsCreateDirectory, input),
       searchEntries: (input) => transport.request(WS_METHODS.projectsSearchEntries, input),
       writeFile: (input) => transport.request(WS_METHODS.projectsWriteFile, input),
     },

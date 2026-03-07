@@ -349,6 +349,32 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("forwards directory browsing and creation to websocket project methods", async () => {
+    requestMock.mockResolvedValue({ entries: [], parentPath: null });
+    const { createWsNativeApi } = await import("./wsNativeApi");
+
+    const api = createWsNativeApi();
+    await api.projects.browseDirectory({
+      rootPath: "/tmp/workspaces",
+      directoryPath: "/tmp/workspaces/demo",
+    });
+    await api.projects.createDirectory({
+      rootPath: "/tmp/workspaces",
+      parentPath: "/tmp/workspaces/demo",
+      name: "child",
+    });
+
+    expect(requestMock).toHaveBeenNthCalledWith(1, WS_METHODS.projectsBrowseDirectory, {
+      rootPath: "/tmp/workspaces",
+      directoryPath: "/tmp/workspaces/demo",
+    });
+    expect(requestMock).toHaveBeenNthCalledWith(2, WS_METHODS.projectsCreateDirectory, {
+      rootPath: "/tmp/workspaces",
+      parentPath: "/tmp/workspaces/demo",
+      name: "child",
+    });
+  });
+
   it("forwards full-thread diff requests to the orchestration websocket method", async () => {
     requestMock.mockResolvedValue({ diff: "patch" });
     const { createWsNativeApi } = await import("./wsNativeApi");
