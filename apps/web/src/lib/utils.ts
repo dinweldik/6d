@@ -14,10 +14,36 @@ export function isWindowsPlatform(platform: string): boolean {
   return /^win(dows)?/i.test(platform);
 }
 
-export const newCommandId = (): CommandId => CommandId.makeUnsafe(crypto.randomUUID());
+const UUID_BYTE_LENGTH = 16;
 
-export const newProjectId = (): ProjectId => ProjectId.makeUnsafe(crypto.randomUUID());
+function formatUuidFromBytes(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+}
 
-export const newThreadId = (): ThreadId => ThreadId.makeUnsafe(crypto.randomUUID());
+export function randomUuid(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
 
-export const newMessageId = (): MessageId => MessageId.makeUnsafe(crypto.randomUUID());
+  const bytes = new Uint8Array(UUID_BYTE_LENGTH);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return formatUuidFromBytes(bytes);
+}
+
+export const newCommandId = (): CommandId => CommandId.makeUnsafe(randomUuid());
+
+export const newProjectId = (): ProjectId => ProjectId.makeUnsafe(randomUuid());
+
+export const newThreadId = (): ThreadId => ThreadId.makeUnsafe(randomUuid());
+
+export const newMessageId = (): MessageId => MessageId.makeUnsafe(randomUuid());

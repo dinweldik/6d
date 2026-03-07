@@ -5,7 +5,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="T3 Code — The best way to code with AI." />
+    <meta name="description" content="6d — The best way to code with AI." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,16 +16,16 @@
     <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>T3 Code</title>
+    <title>6d</title>
   </head>
   <body>
     <div class="page">
       <nav class="nav">
         <a href="/" class="nav-brand">
-          <img src="/icon.png" alt="T3" class="nav-icon" />
+          <span class="nav-wordmark">6d</span>
         </a>
         <a
-          href="https://github.com/pingdotgg/t3code"
+          href="https://github.com/dinweldik/6d"
           target="_blank"
           rel="noopener noreferrer"
           class="nav-github"
@@ -36,10 +36,10 @@
       </nav>
 
       <main class="main">
-        <h1 class="tagline">T3 Code is the best way to code with AI.</h1>
+        <h1 class="tagline">6d is the best way to code with AI.</h1>
 
         <a
-          href="https://github.com/pingdotgg/t3code/releases"
+          href="https://github.com/dinweldik/6d/releases"
           target="_blank"
           rel="noopener noreferrer"
           class="hero-button"
@@ -48,15 +48,34 @@
         </a>
 
         <div class="screenshot-wrap">
-          <img src="/screenshot.jpeg" alt="T3 Code" class="screenshot" />
+          <div class="screenshot" aria-label="6d preview">
+            <div class="preview-shell">
+              <div class="preview-sidebar">
+                <span class="preview-brand">6d</span>
+                <div class="preview-thread is-active"></div>
+                <div class="preview-thread"></div>
+                <div class="preview-thread"></div>
+              </div>
+              <div class="preview-main">
+                <div class="preview-toolbar">
+                  <span class="preview-pill">codex</span>
+                  <span class="preview-pill">full access</span>
+                </div>
+                <div class="preview-message preview-message-wide"></div>
+                <div class="preview-message"></div>
+                <div class="preview-message"></div>
+                <div class="preview-composer"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
       </main>
 
       <footer class="footer">
-        <span class="footer-copy">&copy; {new Date().getFullYear()} T3 Tools Inc</span>
+        <span class="footer-copy">&copy; {new Date().getFullYear()} 6d</span>
         <div class="footer-links">
-          <a href="https://github.com/pingdotgg/t3code" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/dinweldik/6d" target="_blank" rel="noopener noreferrer">GitHub</a>
           <a href="https://discord.gg/jn4EGJjrvv" target="_blank" rel="noopener noreferrer">Discord</a>
         </div>
       </footer>
@@ -144,10 +163,10 @@
     align-items: center;
   }
 
-  .nav-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+  .nav-wordmark {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.08em;
   }
 
   .nav-github {
@@ -235,8 +254,90 @@
     display: block;
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.06);
+    background:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 36%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+    padding: clamp(1rem, 2vw, 1.5rem);
     mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  }
+
+  .preview-shell {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.28fr) 1fr;
+    min-height: min(52vw, 620px);
+    overflow: hidden;
+    border-radius: 14px;
+    background: rgba(8, 8, 11, 0.85);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .preview-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1.35rem 1rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .preview-brand {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.08em;
+  }
+
+  .preview-thread {
+    height: 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .preview-thread.is-active {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .preview-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.35rem;
+  }
+
+  .preview-toolbar {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .preview-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.35rem 0.7rem;
+    font-size: 0.74rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .preview-message {
+    height: 1rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+  }
+
+  .preview-message-wide {
+    width: 82%;
+  }
+
+  .preview-composer {
+    margin-top: auto;
+    height: 5rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .screenshot-wrap::after {
@@ -319,6 +420,14 @@
 
     .screenshot-wrap {
       width: 95vw;
+    }
+
+    .preview-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .preview-sidebar {
+      gap: 0.65rem;
     }
 
     .footer {

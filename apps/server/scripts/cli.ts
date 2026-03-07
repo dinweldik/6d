@@ -37,6 +37,8 @@ interface PublishIconBackup {
   readonly backupPath: string;
 }
 
+const PUBLISH_BACKUP_DIR_NAME = ".publish-icon-backups";
+
 const applyPublishIconOverrides = Effect.fn("applyPublishIconOverrides")(function* (
   repoRoot: string,
   serverDir: string,
@@ -44,11 +46,15 @@ const applyPublishIconOverrides = Effect.fn("applyPublishIconOverrides")(functio
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   const backups: PublishIconBackup[] = [];
+  const backupDir = path.join(serverDir, PUBLISH_BACKUP_DIR_NAME);
+
+  yield* fs.makeDirectory(backupDir, { recursive: true });
 
   for (const override of PUBLISH_ICON_OVERRIDES) {
     const sourcePath = path.join(repoRoot, override.sourceRelativePath);
     const targetPath = path.join(serverDir, override.targetRelativePath);
-    const backupPath = `${targetPath}.publish-bak`;
+    const backupFileName = `${override.targetRelativePath.replaceAll("/", "__")}.publish-bak`;
+    const backupPath = path.join(backupDir, backupFileName);
 
     if (!(yield* fs.exists(sourcePath))) {
       return yield* new CliError({
@@ -73,12 +79,21 @@ const applyPublishIconOverrides = Effect.fn("applyPublishIconOverrides")(functio
 const restorePublishIconOverrides = Effect.fn("restorePublishIconOverrides")(function* (
   backups: ReadonlyArray<PublishIconBackup>,
 ) {
+  const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   for (const backup of backups) {
     if (!(yield* fs.exists(backup.backupPath))) {
       continue;
     }
     yield* fs.rename(backup.backupPath, backup.targetPath);
+  }
+
+  const backupDirs = new Set(backups.map((backup) => path.dirname(backup.backupPath)));
+  for (const backupDir of backupDirs) {
+    if (!(yield* fs.exists(backupDir))) {
+      continue;
+    }
+    yield* fs.remove(backupDir, { recursive: true, force: true });
   }
 });
 
@@ -158,6 +173,7 @@ const publishCmd = Command.make(
     tag: Flag.string("tag").pipe(Flag.withDefault("latest")),
     access: Flag.string("access").pipe(Flag.withDefault("public")),
     appVersion: Flag.string("app-version").pipe(Flag.optional),
+    otp: Flag.string("otp").pipe(Flag.optional),
     provenance: Flag.boolean("provenance").pipe(Flag.withDefault(false)),
     dryRun: Flag.boolean("dry-run").pipe(Flag.withDefault(false)),
     verbose: Flag.boolean("verbose").pipe(Flag.withDefault(false)),
@@ -218,8 +234,17 @@ const publishCmd = Command.make(
             const args = ["publish", "--access", config.access, "--tag", config.tag];
             if (config.provenance) args.push("--provenance");
             if (config.dryRun) args.push("--dry-run");
+            if (Option.isSome(config.otp)) {
+              args.push("--otp", config.otp.value);
+            }
 
-            yield* Effect.log(`[cli] Running: npm ${args.join(" ")}`);
+            const logArgs = Option.isSome(config.otp)
+              ? args.map((arg, index) =>
+                  args[index - 1] === "--otp" ? "[redacted]" : arg,
+                )
+              : args;
+
+            yield* Effect.log(`[cli] Running: npm ${logArgs.join(" ")}`);
             yield* runCommand(
               ChildProcess.make("npm", [...args], {
                 cwd: serverDir,
@@ -250,7 +275,7 @@ const publishCmd = Command.make(
 // ---------------------------------------------------------------------------
 
 const cli = Command.make("cli").pipe(
-  Command.withDescription("T3 server build & publish CLI."),
+  Command.withDescription("6d server build & publish CLI."),
   Command.withSubcommands([buildCmd, publishCmd]),
 );
 
