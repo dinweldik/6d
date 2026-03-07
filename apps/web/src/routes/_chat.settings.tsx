@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type ProviderKind } from "@t3tools/contracts";
 import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import { ZapIcon } from "lucide-react";
@@ -11,6 +11,11 @@ import {
   shouldShowFastTierIcon,
   useAppSettings,
 } from "../appSettings";
+import {
+  getBrowserNotificationAvailability,
+  requestBrowserNotificationPermission,
+  type BrowserNotificationAvailability,
+} from "../browserNotifications";
 import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
@@ -100,11 +105,27 @@ function SettingsRouteView() {
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
   >({});
+  const [browserNotificationAvailability, setBrowserNotificationAvailability] =
+    useState<BrowserNotificationAvailability>(() => getBrowserNotificationAvailability());
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
   const codexServiceTier = settings.codexServiceTier;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
+
+  useEffect(() => {
+    const refreshAvailability = () => {
+      setBrowserNotificationAvailability(getBrowserNotificationAvailability());
+    };
+
+    refreshAvailability();
+    window.addEventListener("focus", refreshAvailability);
+    document.addEventListener("visibilitychange", refreshAvailability);
+    return () => {
+      window.removeEventListener("focus", refreshAvailability);
+      document.removeEventListener("visibilitychange", refreshAvailability);
+    };
+  }, []);
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
@@ -178,6 +199,50 @@ function SettingsRouteView() {
     },
     [settings, updateSettings],
   );
+
+  const updateBrowserNotifications = useCallback(
+    async (checked: boolean) => {
+      if (!checked) {
+        updateSettings({ enableBrowserNotifications: false });
+        return;
+      }
+
+      let availability = getBrowserNotificationAvailability();
+      if (availability === "default") {
+        availability = await requestBrowserNotificationPermission();
+        setBrowserNotificationAvailability(availability);
+      }
+
+      if (availability === "granted") {
+        updateSettings({ enableBrowserNotifications: true });
+        return;
+      }
+
+      updateSettings({ enableBrowserNotifications: false });
+    },
+    [updateSettings],
+  );
+
+  const requestBrowserNotifications = useCallback(async () => {
+    const availability = await requestBrowserNotificationPermission();
+    setBrowserNotificationAvailability(availability);
+    if (availability === "granted") {
+      updateSettings({ enableBrowserNotifications: true });
+    }
+  }, [updateSettings]);
+
+  const browserNotificationStatusText =
+    browserNotificationAvailability === "granted"
+      ? settings.enableBrowserNotifications
+        ? "Notifications are enabled. 6d will notify you when Codex finishes working or needs your input while the app is in the background."
+        : "Browser permission is granted. Turn on the toggle to start receiving notifications on this device."
+      : browserNotificationAvailability === "default"
+        ? "Permission has not been granted yet. Turn on the toggle or use the request button to let this browser show notifications."
+        : browserNotificationAvailability === "denied"
+          ? "Browser permission is blocked. Re-enable notifications in your browser or site settings to use this feature."
+          : browserNotificationAvailability === "insecure"
+            ? "Notifications require a secure origin. Open 6d over HTTPS or localhost to enable them on this device."
+            : "This browser does not support Web Notifications.";
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
@@ -517,6 +582,65 @@ function SettingsRouteView() {
                   </Button>
                 </div>
               ) : null}
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">Notifications</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Best-effort browser notifications for long-running turns when this web app is in
+                  the background.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Browser notifications</p>
+                    <p className="text-xs text-muted-foreground">
+                      Notify when Codex finishes or is waiting for your approval/input.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.enableBrowserNotifications}
+                    onCheckedChange={(checked) => {
+                      void updateBrowserNotifications(Boolean(checked));
+                    }}
+                    aria-label="Enable browser notifications"
+                  />
+                </div>
+
+                <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                  <p>{browserNotificationStatusText}</p>
+                  {browserNotificationAvailability === "default" ? (
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => void requestBrowserNotifications()}
+                      >
+                        Request permission
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+
+                {settings.enableBrowserNotifications !== defaults.enableBrowserNotifications ? (
+                  <div className="flex justify-end">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        updateSettings({
+                          enableBrowserNotifications: defaults.enableBrowserNotifications,
+                        })
+                      }
+                    >
+                      Restore default
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-5">

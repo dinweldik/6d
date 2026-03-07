@@ -31,4 +31,4 @@ export interface CheckpointReactorShape {
 export class CheckpointReactor extends ServiceMap.Service<
   CheckpointReactor,
   CheckpointReactorShape
->()("t3/orchestration/Services/CheckpointReactor") {}
+>()("@dinweldik/6d/orchestration/Services/CheckpointReactor") {}
