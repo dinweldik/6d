@@ -301,10 +301,8 @@ export default function Sidebar() {
       shellId: params.shellId ?? null,
     }),
   });
-  const { data: keybindings = EMPTY_KEYBINDINGS } = useQuery({
-    ...serverConfigQueryOptions(),
-    select: (config) => config.keybindings,
-  });
+  const { data: serverConfig } = useQuery(serverConfigQueryOptions());
+  const keybindings = serverConfig?.keybindings ?? EMPTY_KEYBINDINGS;
   const queryClient = useQueryClient();
   const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const [addingProject, setAddingProject] = useState(false);
@@ -435,6 +433,14 @@ export default function Sidebar() {
       setProjectBrowserCurrentPath((current) => current ?? payload.cwd);
     });
   }, []);
+
+  useEffect(() => {
+    if (!serverConfig?.cwd) {
+      return;
+    }
+    setProjectBrowserRootPath((current) => current ?? serverConfig.cwd);
+    setProjectBrowserCurrentPath((current) => current ?? serverConfig.cwd);
+  }, [serverConfig?.cwd]);
 
   const handleNewThread = useCallback(
     (

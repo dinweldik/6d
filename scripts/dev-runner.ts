@@ -13,6 +13,7 @@ const BASE_SERVER_PORT = 3773;
 const BASE_WEB_PORT = 5733;
 const MAX_HASH_OFFSET = 3000;
 const MAX_PORT = 65535;
+const DEFAULT_EXPOSE_HOST = "0.0.0.0";
 
 export const DEFAULT_DEV_STATE_DIR = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(homedir(), ".t3", "dev"),
@@ -428,7 +429,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
         input.logWebSocketEvents,
         envOverrides.logWebSocketEvents,
       ),
-      host: input.host,
+      host: resolveRunnerHost(input.mode, input.host),
       port: input.port,
       devUrl: input.devUrl,
     });
@@ -479,6 +480,33 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
           }),
     ),
   );
+}
+
+export function normalizeImplicitHostFlag(
+  args: ReadonlyArray<string>,
+): ReadonlyArray<string> {
+  const normalized = [...args];
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    if (normalized[index] !== "--host") {
+      continue;
+    }
+
+    const next = normalized[index + 1];
+    if (next === undefined || next.startsWith("-")) {
+      normalized.splice(index + 1, 0, DEFAULT_EXPOSE_HOST);
+      index += 1;
+    }
+  }
+
+  return normalized;
+}
+
+export function resolveRunnerHost(mode: DevMode, explicitHost: string | undefined): string | undefined {
+  if (explicitHost !== undefined) {
+    return explicitHost;
+  }
+  return mode === "dev:desktop" ? undefined : DEFAULT_EXPOSE_HOST;
 }
 
 const devRunnerCli = Command.make("dev-runner", {
@@ -542,10 +570,9 @@ const cliRuntimeLayer = Layer.mergeAll(
   NetService.layer,
 );
 
-const runtimeProgram = Command.run(devRunnerCli, { version: "0.0.0" }).pipe(
-  Effect.scoped,
-  Effect.provide(cliRuntimeLayer),
-);
+const runtimeProgram = Command.runWith(devRunnerCli, { version: "0.0.0" })(
+  normalizeImplicitHostFlag(process.argv.slice(2)),
+).pipe(Effect.scoped, Effect.provide(cliRuntimeLayer));
 
 if (import.meta.main) {
   NodeRuntime.runMain(runtimeProgram);

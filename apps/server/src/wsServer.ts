@@ -110,6 +110,62 @@ const isServerNotRunningError = (error: unknown): boolean => {
   );
 };
 
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const normalized = raw?.split(",")[0]?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (normalized === "localhost") return true;
+  if (normalized === "0.0.0.0") return true;
+  if (normalized === "::") return true;
+  if (normalized === "::1") return true;
+  if (normalized.startsWith("127.")) return true;
+  return false;
+}
+
+function hostnameFromHostHeader(hostHeader: string): string | undefined {
+  try {
+    return new URL(`http://${hostHeader}`).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveDevRedirectLocation(params: {
+  readonly devUrl: URL;
+  readonly request: http.IncomingMessage;
+}): string {
+  const { devUrl, request } = params;
+  if (!isLoopbackHostname(devUrl.hostname)) {
+    return devUrl.href;
+  }
+
+  const hostHeader =
+    firstHeaderValue(request.headers["x-forwarded-host"]) ?? firstHeaderValue(request.headers.host);
+  if (!hostHeader) {
+    return devUrl.href;
+  }
+
+  const requestHostname = hostnameFromHostHeader(hostHeader);
+  if (!requestHostname || isLoopbackHostname(requestHostname)) {
+    return devUrl.href;
+  }
+
+  const forwardedProto = firstHeaderValue(request.headers["x-forwarded-proto"])?.toLowerCase();
+  const protocol =
+    forwardedProto === "http" || forwardedProto === "https"
+      ? `${forwardedProto}:`
+      : devUrl.protocol;
+
+  const rewritten = new URL(devUrl.toString());
+  rewritten.protocol = protocol;
+  rewritten.hostname = requestHostname;
+  return rewritten.href;
+}
+
 function rejectUpgrade(socket: Duplex, statusCode: number, message: string): void {
   socket.end(
     `HTTP/1.1 ${statusCode} ${statusCode === 401 ? "Unauthorized" : "Bad Request"}\r\n` +
@@ -541,7 +597,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
         // In dev mode, redirect to Vite dev server
         if (devUrl) {
-          respond(302, { Location: devUrl.href });
+          respond(302, { Location: resolveDevRedirectLocation({ devUrl, request: req }) });
           return;
         }
 

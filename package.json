@@ -23,6 +23,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev-runner.ts dev",
+    "dev:single": "bun run build:contracts && bun run --cwd apps/web build && bun run --cwd apps/server dev -- --host 0.0.0.0 --no-browser",
     "dev:server": "node scripts/dev-runner.ts dev:server",
     "dev:web": "node scripts/dev-runner.ts dev:web",
     "dev:marketing": "turbo run dev --filter=@t3tools/marketing",

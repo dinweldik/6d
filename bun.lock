@@ -43,7 +43,7 @@
     },
     "apps/server": {
       "name": "@dinweldik/6d",
-      "version": "1.0.3",
+      "version": "1.0.9",
       "bin": {
         "6d": "./dist/index.mjs",
       },

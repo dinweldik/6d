@@ -7,7 +7,9 @@ import {
   DEFAULT_DEV_STATE_DIR,
   createDevRunnerEnv,
   findFirstAvailableOffset,
+  normalizeImplicitHostFlag,
   resolveModePortOffsets,
+  resolveRunnerHost,
   resolveOffset,
 } from "./dev-runner.ts";
 
@@ -41,6 +43,51 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         );
 
         assert.ok(error.includes("Invalid T3CODE_PORT_OFFSET"));
+      }),
+    );
+  });
+
+  describe("normalizeImplicitHostFlag", () => {
+    it.effect("treats bare --host as 0.0.0.0", () =>
+      Effect.sync(() => {
+        const normalized = normalizeImplicitHostFlag(["dev:web", "--host"]);
+        assert.deepStrictEqual(normalized, ["dev:web", "--host", "0.0.0.0"]);
+      }),
+    );
+
+    it.effect("inserts 0.0.0.0 when --host is followed by another flag", () =>
+      Effect.sync(() => {
+        const normalized = normalizeImplicitHostFlag(["dev:web", "--host", "--dry-run"]);
+        assert.deepStrictEqual(normalized, ["dev:web", "--host", "0.0.0.0", "--dry-run"]);
+      }),
+    );
+
+    it.effect("keeps explicit host values unchanged", () =>
+      Effect.sync(() => {
+        const normalized = normalizeImplicitHostFlag(["dev:web", "--host", "127.0.0.1"]);
+        assert.deepStrictEqual(normalized, ["dev:web", "--host", "127.0.0.1"]);
+      }),
+    );
+  });
+
+  describe("resolveRunnerHost", () => {
+    it.effect("defaults web/server modes to wildcard host", () =>
+      Effect.sync(() => {
+        assert.equal(resolveRunnerHost("dev", undefined), "0.0.0.0");
+        assert.equal(resolveRunnerHost("dev:web", undefined), "0.0.0.0");
+        assert.equal(resolveRunnerHost("dev:server", undefined), "0.0.0.0");
+      }),
+    );
+
+    it.effect("keeps desktop mode local by default", () =>
+      Effect.sync(() => {
+        assert.equal(resolveRunnerHost("dev:desktop", undefined), undefined);
+      }),
+    );
+
+    it.effect("respects explicit host overrides", () =>
+      Effect.sync(() => {
+        assert.equal(resolveRunnerHost("dev:web", "127.0.0.1"), "127.0.0.1");
       }),
     );
   });

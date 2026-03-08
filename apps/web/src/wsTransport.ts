@@ -49,11 +49,7 @@ function normalizeWsUrlForPage(input: string): string {
       parsed.protocol = "ws:";
     }
 
-    if (
-      pageProtocol === "https:" &&
-      isLocalhostHostname(parsed.hostname) &&
-      !isLocalhostHostname(window.location.hostname)
-    ) {
+    if (isLocalhostHostname(parsed.hostname) && !isLocalhostHostname(window.location.hostname)) {
       parsed.hostname = window.location.hostname;
     }
 

@@ -191,7 +191,28 @@ describe("WsTransport", () => {
     transport.dispose();
   });
 
-  it("rewrites localhost hosts to the current origin when the browser is remote", () => {
+  it("rewrites localhost hosts to the current origin when the browser is remote over HTTP", () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        location: {
+          protocol: "http:",
+          host: "100.88.10.4:5733",
+          hostname: "100.88.10.4",
+          port: "5733",
+        },
+        desktopBridge: undefined,
+      },
+    });
+
+    const transport = new WsTransport("ws://localhost:3773");
+    const socket = getSocket();
+
+    expect(socket.url).toBe("ws://100.88.10.4:3773/");
+    transport.dispose();
+  });
+
+  it("rewrites localhost hosts to the current origin when the browser is remote over HTTPS", () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {

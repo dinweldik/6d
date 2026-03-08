@@ -322,7 +322,10 @@ async function waitForPush(
 async function requestPath(
   port: number,
   requestPath: string,
-): Promise<{ statusCode: number; body: string }> {
+  options?: {
+    headers?: Http.OutgoingHttpHeaders;
+  },
+): Promise<{ statusCode: number; body: string; headers: Http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const req = Http.request(
       {
@@ -330,6 +333,7 @@ async function requestPath(
         port,
         path: requestPath,
         method: "GET",
+        headers: options?.headers,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -340,6 +344,7 @@ async function requestPath(
           resolve({
             statusCode: res.statusCode ?? 0,
             body: Buffer.concat(chunks).toString("utf8"),
+            headers: res.headers,
           });
         });
       },
@@ -555,6 +560,46 @@ describe("WebSocket Server", () => {
     expect(response.headers.get("content-type")).toContain("image/png");
     const bytes = Buffer.from(await response.arrayBuffer());
     expect(bytes).toEqual(Buffer.from("hello-encoded-attachment"));
+  });
+
+  it("rewrites dev redirects from localhost to the incoming remote host", async () => {
+    server = await createTestServer({
+      cwd: "/test/project",
+      devUrl: "http://localhost:5733",
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    expect(port).toBeGreaterThan(0);
+
+    const response = await requestPath(port, "/", {
+      headers: {
+        Host: "vscode.buru-cobra.ts.net",
+        "X-Forwarded-Proto": "https",
+      },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("https://vscode.buru-cobra.ts.net:5733/");
+  });
+
+  it("keeps the dev server port when incoming host includes a non-dev port", async () => {
+    server = await createTestServer({
+      cwd: "/test/project",
+      devUrl: "http://localhost:5733",
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    expect(port).toBeGreaterThan(0);
+
+    const response = await requestPath(port, "/", {
+      headers: {
+        Host: "vscode.buru-cobra.ts.net:3773",
+        "X-Forwarded-Proto": "https",
+      },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("https://vscode.buru-cobra.ts.net:5733/");
   });
 
   it("serves static index for root path", async () => {

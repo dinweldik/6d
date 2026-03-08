@@ -38,6 +38,7 @@ That launches the backend (`apps/server`) plus the Vite web client (`apps/web`).
 - `bun run dev:web` to run only the web UI (useful when iterating on React)
 - `bun run dev:server` to run only the backend service and Codex worker
 - `bun run dev:desktop` to exercise the bundled Electron shell
+- `bun run dev:single` to mimic `npx @dinweldik/6d` (single process server + built web UI, no Vite HMR)
 
 The frontend listens on `http://localhost:5733` by default and the backend on `ws://localhost:3773`, but the browser automatically normalizes those URLs (to `wss://` when the page is served over HTTPS and to the current host when you visit from another device).
 
