@@ -8,6 +8,8 @@ import type {
   GitListBranchesResult,
   GitPullInput,
   GitPullResult,
+  GitReadWorkingTreeFileDiffInput,
+  GitReadWorkingTreeFileDiffResult,
   GitRemoveWorktreeInput,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
@@ -139,6 +141,9 @@ export interface NativeApi {
     // Stacked action API
     pull: (input: GitPullInput) => Promise<GitPullResult>;
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
+    readWorkingTreeFileDiff: (
+      input: GitReadWorkingTreeFileDiffInput,
+    ) => Promise<GitReadWorkingTreeFileDiffResult>;
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
   };
   contextMenu: {

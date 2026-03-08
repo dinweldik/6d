@@ -1,4 +1,5 @@
 import { Cache, Data, Duration, Effect, Exit, FileSystem, Layer, Path } from "effect";
+import type { GitFileChangeStatus } from "@t3tools/contracts";
 
 import { GitCommandError } from "../Errors.ts";
 import { GitService } from "../Services/GitService.ts";
@@ -75,6 +76,30 @@ function parsePorcelainPath(line: string): string | null {
   const parts = line.trim().split(/\s+/g);
   const filePath = parts.at(-1) ?? "";
   return filePath.length > 0 ? filePath : null;
+}
+
+function resolveFileChangeStatusFromPorcelain(line: string): GitFileChangeStatus | null {
+  if (line.startsWith("? ")) {
+    return "untracked";
+  }
+
+  if (line.startsWith("u ")) {
+    return "unmerged";
+  }
+
+  if (!(line.startsWith("1 ") || line.startsWith("2 "))) {
+    return null;
+  }
+
+  const parts = line.trim().split(/\s+/g);
+  const xy = parts[1] ?? "";
+  if (xy.includes("U")) return "unmerged";
+  if (xy.includes("R")) return "renamed";
+  if (xy.includes("C")) return "copied";
+  if (xy.includes("A")) return "added";
+  if (xy.includes("D")) return "deleted";
+  if (xy.includes("T")) return "type_changed";
+  return "modified";
 }
 
 function parseBranchLine(line: string): { name: string; current: boolean } | null {
@@ -257,6 +282,17 @@ const makeGitCore = Effect.gen(function* () {
         timeoutMs: 5_000,
       },
     ).pipe(Effect.map((result) => result.code === 0));
+
+  const headContainsPath = (
+    cwd: string,
+    filePath: string,
+  ): Effect.Effect<boolean, GitCommandError> =>
+    executeGit("GitCore.headContainsPath", cwd, ["cat-file", "-e", `HEAD:${filePath}`], {
+      allowNonZeroExit: true,
+      timeoutMs: 5_000,
+    }).pipe(Effect.map((result) => result.code === 0));
+
+  const workingTreeNullDevicePath = process.platform === "win32" ? "NUL" : "/dev/null";
 
   const resolveAvailableBranchName = (
     cwd: string,
@@ -548,7 +584,7 @@ const makeGitCore = Effect.gen(function* () {
       let aheadCount = 0;
       let behindCount = 0;
       let hasWorkingTreeChanges = false;
-      const changedFilesWithoutNumstat = new Set<string>();
+      const changedFileStatusByPath = new Map<string, GitFileChangeStatus>();
 
       for (const line of statusStdout.split(/\r?\n/g)) {
         if (line.startsWith("# branch.head ")) {
@@ -571,7 +607,10 @@ const makeGitCore = Effect.gen(function* () {
         if (line.trim().length > 0 && !line.startsWith("#")) {
           hasWorkingTreeChanges = true;
           const pathValue = parsePorcelainPath(line);
-          if (pathValue) changedFilesWithoutNumstat.add(pathValue);
+          const status = resolveFileChangeStatusFromPorcelain(line);
+          if (pathValue && status) {
+            changedFileStatusByPath.set(pathValue, status);
+          }
         }
       }
 
@@ -598,13 +637,18 @@ const makeGitCore = Effect.gen(function* () {
         .map(([filePath, stat]) => {
           insertions += stat.insertions;
           deletions += stat.deletions;
-          return { path: filePath, insertions: stat.insertions, deletions: stat.deletions };
+          return {
+            path: filePath,
+            status: changedFileStatusByPath.get(filePath) ?? "modified",
+            insertions: stat.insertions,
+            deletions: stat.deletions,
+          };
         })
         .toSorted((a, b) => a.path.localeCompare(b.path));
 
-      for (const filePath of changedFilesWithoutNumstat) {
+      for (const [filePath, status] of changedFileStatusByPath) {
         if (fileStatMap.has(filePath)) continue;
-        files.push({ path: filePath, insertions: 0, deletions: 0 });
+        files.push({ path: filePath, status, insertions: 0, deletions: 0 });
       }
       files.sort((a, b) => a.path.localeCompare(b.path));
 
@@ -635,6 +679,62 @@ const makeGitCore = Effect.gen(function* () {
         pr: null,
       })),
     );
+
+  const readWorkingTreeFileDiff: GitCoreShape["readWorkingTreeFileDiff"] = (input) =>
+    Effect.gen(function* () {
+      const isTrackedAtHead = yield* headContainsPath(input.cwd, input.path);
+      if (isTrackedAtHead) {
+        const diff = yield* runGitStdout("GitCore.readWorkingTreeFileDiff.head", input.cwd, [
+          "diff",
+          "HEAD",
+          "--patch",
+          "--minimal",
+          "--",
+          input.path,
+        ]);
+        return {
+          path: input.path,
+          diff,
+        };
+      }
+
+      const workingTreePath = path.join(input.cwd, input.path);
+      const workingTreeEntry = yield* fileSystem.stat(workingTreePath).pipe(
+        Effect.catch(() => Effect.succeed(null)),
+      );
+
+      if (!workingTreeEntry) {
+        return yield* createGitCommandError(
+          "GitCore.readWorkingTreeFileDiff",
+          input.cwd,
+          ["diff", "--patch", "--minimal", "--", input.path],
+          `File '${input.path}' does not exist in the working tree.`,
+        );
+      }
+
+      if (workingTreeEntry.type === "Directory") {
+        return yield* createGitCommandError(
+          "GitCore.readWorkingTreeFileDiff",
+          input.cwd,
+          ["diff", "--patch", "--minimal", "--", input.path],
+          `Path '${input.path}' is a directory.`,
+        );
+      }
+
+      const diff = yield* executeGit(
+        "GitCore.readWorkingTreeFileDiff.untracked",
+        input.cwd,
+        ["diff", "--no-index", "--patch", "--minimal", "--", workingTreeNullDevicePath, input.path],
+        {
+          allowNonZeroExit: true,
+        },
+      ).pipe(Effect.map((result) => result.stdout));
+
+      return {
+        path: input.path,
+        diff,
+      };
+    });
 
   const prepareCommitContext: GitCoreShape["prepareCommitContext"] = (cwd) =>
     Effect.gen(function* () {
@@ -1189,6 +1289,7 @@ const makeGitCore = Effect.gen(function* () {
   return {
     status,
     statusDetails,
+    readWorkingTreeFileDiff,
     prepareCommitContext,
     commit,
     pushCurrentBranch,

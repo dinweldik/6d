@@ -20,6 +20,17 @@ const GitPrStepStatus = Schema.Literals([
   "skipped_not_requested",
 ]);
 const GitStatusPrState = Schema.Literals(["open", "closed", "merged"]);
+export const GitFileChangeStatus = Schema.Literals([
+  "modified",
+  "added",
+  "deleted",
+  "renamed",
+  "copied",
+  "untracked",
+  "type_changed",
+  "unmerged",
+]);
+export type GitFileChangeStatus = typeof GitFileChangeStatus.Type;
 
 export const GitBranch = Schema.Struct({
   name: TrimmedNonEmptyStringSchema,
@@ -42,6 +53,12 @@ export const GitStatusInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });
 export type GitStatusInput = typeof GitStatusInput.Type;
+
+export const GitReadWorkingTreeFileDiffInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  path: TrimmedNonEmptyStringSchema,
+});
+export type GitReadWorkingTreeFileDiffInput = typeof GitReadWorkingTreeFileDiffInput.Type;
 
 export const GitPullInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
@@ -111,6 +128,7 @@ export const GitStatusResult = Schema.Struct({
     files: Schema.Array(
       Schema.Struct({
         path: TrimmedNonEmptyStringSchema,
+        status: GitFileChangeStatus,
         insertions: NonNegativeInt,
         deletions: NonNegativeInt,
       }),
@@ -124,6 +142,12 @@ export const GitStatusResult = Schema.Struct({
   pr: Schema.NullOr(GitStatusPr),
 });
 export type GitStatusResult = typeof GitStatusResult.Type;
+
+export const GitReadWorkingTreeFileDiffResult = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+  diff: Schema.String,
+});
+export type GitReadWorkingTreeFileDiffResult = typeof GitReadWorkingTreeFileDiffResult.Type;
 
 export const GitListBranchesResult = Schema.Struct({
   branches: Schema.Array(GitBranch),

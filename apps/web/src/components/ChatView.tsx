@@ -41,7 +41,7 @@ import {
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   measureElement as measureVirtualElement,
   type VirtualItem,
@@ -52,7 +52,7 @@ import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
 import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
 
 import { isElectron } from "../env";
-import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
+import { stripDiffSearchParams } from "../diffRouteSearch";
 import {
   type ComposerSlashCommand,
   type ComposerTrigger,
@@ -132,7 +132,6 @@ import {
   CircleAlertIcon,
   FileIcon,
   FolderIcon,
-  DiffIcon,
   EllipsisIcon,
   FolderClosedIcon,
   LockIcon,
@@ -202,7 +201,6 @@ import {
   projectScriptIdFromCommand,
   setupProjectScript,
 } from "~/projectScripts";
-import { Toggle } from "./ui/toggle";
 import { SidebarTrigger } from "./ui/sidebar";
 import { readNativeApi } from "~/nativeApi";
 import {
@@ -605,10 +603,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const setStoreThreadBranch = useStore((store) => store.setThreadBranch);
   const { settings } = useAppSettings();
   const navigate = useNavigate();
-  const rawSearch = useSearch({
-    strict: false,
-    select: (params) => parseDiffRouteSearch(params),
-  });
   const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
   const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
@@ -764,11 +758,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     composerDraft.interactionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
   const isServerThread = serverThread !== undefined;
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
-  const diffSearch = useMemo(
-    () => parseDiffRouteSearch(rawSearch as Record<string, unknown>),
-    [rawSearch],
-  );
-  const diffOpen = diffSearch.diff === "1";
   const activeThreadId = activeThread?.id ?? null;
   const activeLatestTurn = activeThread?.latestTurn ?? null;
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
@@ -1310,21 +1299,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     () => shortcutLabelForCommand(keybindings, "terminal.close"),
     [keybindings],
   );
-  const diffPanelShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "diff.toggle"),
-    [keybindings],
-  );
-  const onToggleDiff = useCallback(() => {
-    void navigate({
-      to: "/$threadId",
-      params: { threadId },
-      replace: true,
-      search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
-        return diffOpen ? rest : { ...rest, diff: "1" };
-      },
-    });
-  }, [diffOpen, navigate, threadId]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -2226,13 +2200,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
         return;
       }
 
-      if (command === "diff.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        onToggleDiff();
-        return;
-      }
-
       const scriptId = projectScriptIdFromCommand(command);
       if (!scriptId || !activeProject) return;
       const script = activeProject.scripts.find((entry) => entry.id === scriptId);
@@ -2254,7 +2221,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     runProjectScript,
     splitTerminal,
     keybindings,
-    onToggleDiff,
     toggleTerminalVisibility,
   ]);
 
@@ -3394,7 +3360,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
         )}
       >
         <ChatHeader
-          activeThreadId={activeThread.id}
           activeThreadTitle={activeThread.title}
           activeProjectName={activeProject?.name}
           isGitRepo={isGitRepo}
@@ -3405,15 +3370,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
           }
           keybindings={keybindings}
           availableEditors={availableEditors}
-          diffToggleShortcutLabel={diffPanelShortcutLabel}
           gitCwd={gitCwd}
-          diffOpen={diffOpen}
           onRunProjectScript={(script) => {
             void runProjectScript(script);
           }}
           onAddProjectScript={saveProjectScript}
           onUpdateProjectScript={updateProjectScript}
-          onToggleDiff={onToggleDiff}
         />
       </header>
 
@@ -3975,7 +3937,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
 }
 
 interface ChatHeaderProps {
-  activeThreadId: ThreadId;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
   isGitRepo: boolean;
@@ -3984,17 +3945,13 @@ interface ChatHeaderProps {
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
-  diffToggleShortcutLabel: string | null;
   gitCwd: string | null;
-  diffOpen: boolean;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<void>;
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
-  onToggleDiff: () => void;
 }
 
 const ChatHeader = memo(function ChatHeader({
-  activeThreadId,
   activeThreadTitle,
   activeProjectName,
   isGitRepo,
@@ -4003,13 +3960,10 @@ const ChatHeader = memo(function ChatHeader({
   preferredScriptId,
   keybindings,
   availableEditors,
-  diffToggleShortcutLabel,
   gitCwd,
-  diffOpen,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
-  onToggleDiff,
 }: ChatHeaderProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
@@ -4050,31 +4004,7 @@ const ChatHeader = memo(function ChatHeader({
             openInCwd={openInCwd}
           />
         )}
-        {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Toggle
-                className="shrink-0"
-                pressed={diffOpen}
-                onPressedChange={onToggleDiff}
-                aria-label="Toggle diff panel"
-                variant="outline"
-                size="xs"
-                disabled={!isGitRepo}
-              >
-                <DiffIcon className="size-3" />
-              </Toggle>
-            }
-          />
-          <TooltipPopup side="bottom">
-            {!isGitRepo
-              ? "Diff panel is unavailable because this project is not a git repository."
-              : diffToggleShortcutLabel
-                ? `Toggle diff panel (${diffToggleShortcutLabel})`
-                : "Toggle diff panel"}
-          </TooltipPopup>
-        </Tooltip>
+        {activeProjectName && <GitActionsControl gitCwd={gitCwd} projectName={activeProjectName} />}
       </div>
     </div>
   );

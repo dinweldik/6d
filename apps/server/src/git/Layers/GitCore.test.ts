@@ -97,6 +97,7 @@ const makeIsolatedGitCore = (gitService: GitServiceShape) =>
     return {
       status: (input) => core.status(input),
       statusDetails: (cwd) => core.statusDetails(cwd),
+      readWorkingTreeFileDiff: (input) => core.readWorkingTreeFileDiff(input),
       prepareCommitContext: (cwd) => core.prepareCommitContext(cwd),
       commit: (cwd, subject, body) => core.commit(cwd, subject, body),
       pushCurrentBranch: (cwd, fallbackBranch) => core.pushCurrentBranch(cwd, fallbackBranch),

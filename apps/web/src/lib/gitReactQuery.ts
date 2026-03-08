@@ -10,6 +10,8 @@ const GIT_BRANCHES_REFETCH_INTERVAL_MS = 60_000;
 export const gitQueryKeys = {
   all: ["git"] as const,
   status: (cwd: string | null) => ["git", "status", cwd] as const,
+  workingTreeFileDiff: (cwd: string | null, path: string | null) =>
+    ["git", "working-tree-file-diff", cwd, path] as const,
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
 };
 
@@ -33,6 +35,28 @@ export function gitStatusQueryOptions(cwd: string | null) {
       return api.git.status({ cwd });
     },
     enabled: cwd !== null,
+    staleTime: GIT_STATUS_STALE_TIME_MS,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+    refetchInterval: GIT_STATUS_REFETCH_INTERVAL_MS,
+  });
+}
+
+export function gitWorkingTreeFileDiffQueryOptions(input: {
+  cwd: string | null;
+  path: string | null;
+  enabled?: boolean;
+}) {
+  return queryOptions({
+    queryKey: gitQueryKeys.workingTreeFileDiff(input.cwd, input.path),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!input.cwd || !input.path) {
+        throw new Error("Git file diff is unavailable.");
+      }
+      return api.git.readWorkingTreeFileDiff({ cwd: input.cwd, path: input.path });
+    },
+    enabled: input.enabled ?? (input.cwd !== null && input.path !== null),
     staleTime: GIT_STATUS_STALE_TIME_MS,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",

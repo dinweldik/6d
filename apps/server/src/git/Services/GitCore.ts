@@ -17,6 +17,8 @@ import type {
   GitListBranchesInput,
   GitListBranchesResult,
   GitPullResult,
+  GitReadWorkingTreeFileDiffInput,
+  GitReadWorkingTreeFileDiffResult,
   GitRemoveWorktreeInput,
   GitStatusInput,
   GitStatusResult,
@@ -69,6 +71,13 @@ export interface GitCoreShape {
    * Read detailed working tree / branch status for a repository.
    */
   readonly statusDetails: (cwd: string) => Effect.Effect<GitStatusDetails, GitCommandError>;
+
+  /**
+   * Read a unified diff for a single working tree file.
+   */
+  readonly readWorkingTreeFileDiff: (
+    input: GitReadWorkingTreeFileDiffInput,
+  ) => Effect.Effect<GitReadWorkingTreeFileDiffResult, GitCommandError>;
 
   /**
    * Build staged change context for commit generation.

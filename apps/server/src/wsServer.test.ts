@@ -401,7 +401,10 @@ describe("WebSocket Server", () => {
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
-      gitCore?: Pick<GitCoreShape, "listBranches" | "initRepo" | "pullCurrentBranch">;
+      gitCore?: Pick<
+        GitCoreShape,
+        "listBranches" | "initRepo" | "pullCurrentBranch" | "readWorkingTreeFileDiff"
+      >;
       terminalManager?: TerminalManagerShape;
     } = {},
   ): Promise<Http.Server> {
@@ -1692,6 +1695,12 @@ describe("WebSocket Server", () => {
         listBranches,
         initRepo,
         pullCurrentBranch,
+        readWorkingTreeFileDiff: vi.fn(() =>
+          Effect.succeed({
+            path: "src/index.ts",
+            diff: "",
+          }),
+        ),
       },
     });
     const addr = server.address();
@@ -1721,7 +1730,7 @@ describe("WebSocket Server", () => {
       branch: "feature/test",
       hasWorkingTreeChanges: true,
       workingTree: {
-        files: [{ path: "src/index.ts", insertions: 7, deletions: 2 }],
+        files: [{ path: "src/index.ts", status: "modified" as const, insertions: 7, deletions: 2 }],
         insertions: 7,
         deletions: 2,
       },
@@ -1749,6 +1758,45 @@ describe("WebSocket Server", () => {
     expect(response.error).toBeUndefined();
     expect(response.result).toEqual(statusResult);
     expect(status).toHaveBeenCalledWith({ cwd: "/test" });
+  });
+
+  it("supports git.readWorkingTreeFileDiff over websocket", async () => {
+    const readWorkingTreeFileDiff = vi.fn(() =>
+      Effect.succeed({
+        path: "src/index.ts",
+        diff: "diff --git a/src/index.ts b/src/index.ts\n+hello\n",
+      }),
+    );
+
+    server = await createTestServer({
+      cwd: "/test",
+      gitCore: {
+        listBranches: vi.fn(() => Effect.succeed({ branches: [], isRepo: true })),
+        initRepo: vi.fn(() => Effect.void),
+        pullCurrentBranch: vi.fn(() => Effect.void as any),
+        readWorkingTreeFileDiff,
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const ws = await connectWs(port);
+    connections.push(ws);
+    await waitForMessage(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.gitReadWorkingTreeFileDiff, {
+      cwd: "/test",
+      path: "src/index.ts",
+    });
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({
+      path: "src/index.ts",
+      diff: "diff --git a/src/index.ts b/src/index.ts\n+hello\n",
+    });
+    expect(readWorkingTreeFileDiff).toHaveBeenCalledWith({
+      cwd: "/test",
+      path: "src/index.ts",
+    });
   });
 
   it("returns errors from git.runStackedAction", async () => {
