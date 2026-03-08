@@ -1,5 +1,7 @@
 import type {
   GitCheckoutInput,
+  GitCommitInput,
+  GitCommitResult,
   GitCreateBranchInput,
   GitCreateWorktreeInput,
   GitCreateWorktreeResult,
@@ -8,13 +10,17 @@ import type {
   GitListBranchesResult,
   GitPullInput,
   GitPullResult,
+  GitPushInput,
+  GitPushResult,
   GitReadWorkingTreeFileDiffInput,
   GitReadWorkingTreeFileDiffResult,
   GitRemoveWorktreeInput,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
+  GitStageFilesInput,
   GitStatusInput,
   GitStatusResult,
+  GitUnstageFilesInput,
 } from "./git";
 import type {
   ProjectBrowseDirectoryInput,
@@ -138,8 +144,12 @@ export interface NativeApi {
     createBranch: (input: GitCreateBranchInput) => Promise<void>;
     checkout: (input: GitCheckoutInput) => Promise<void>;
     init: (input: GitInitInput) => Promise<void>;
+    stageFiles: (input: GitStageFilesInput) => Promise<void>;
+    unstageFiles: (input: GitUnstageFilesInput) => Promise<void>;
     // Stacked action API
     pull: (input: GitPullInput) => Promise<GitPullResult>;
+    push: (input: GitPushInput) => Promise<GitPushResult>;
+    commit: (input: GitCommitInput) => Promise<GitCommitResult>;
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
     readWorkingTreeFileDiff: (
       input: GitReadWorkingTreeFileDiffInput,

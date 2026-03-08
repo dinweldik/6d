@@ -987,9 +987,29 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.readWorkingTreeFileDiff(body);
       }
 
+      case WS_METHODS.gitStageFiles: {
+        const body = stripRequestTag(request.body);
+        return yield* git.stageFiles(body);
+      }
+
+      case WS_METHODS.gitUnstageFiles: {
+        const body = stripRequestTag(request.body);
+        return yield* git.unstageFiles(body);
+      }
+
       case WS_METHODS.gitPull: {
         const body = stripRequestTag(request.body);
         return yield* git.pullCurrentBranch(body.cwd);
+      }
+
+      case WS_METHODS.gitPush: {
+        const body = stripRequestTag(request.body);
+        return yield* git.pushCurrentBranch(body.cwd, null);
+      }
+
+      case WS_METHODS.gitCommit: {
+        const body = stripRequestTag(request.body);
+        return yield* git.commitStaged(body);
       }
 
       case WS_METHODS.gitRunStackedAction: {

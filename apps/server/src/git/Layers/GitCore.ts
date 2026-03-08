@@ -78,13 +78,37 @@ function parsePorcelainPath(line: string): string | null {
   return filePath.length > 0 ? filePath : null;
 }
 
-function resolveFileChangeStatusFromPorcelain(line: string): GitFileChangeStatus | null {
+function resolveFileChangeStatusFromCode(code: string): GitFileChangeStatus | null {
+  if (code === "." || code.length === 0) {
+    return null;
+  }
+  if (code === "M") return "modified";
+  if (code === "A") return "added";
+  if (code === "D") return "deleted";
+  if (code === "R") return "renamed";
+  if (code === "C") return "copied";
+  if (code === "T") return "type_changed";
+  if (code === "U") return "unmerged";
+  if (code === "?") return "untracked";
+  return "modified";
+}
+
+function parsePorcelainStatuses(line: string): {
+  indexStatus: GitFileChangeStatus | null;
+  worktreeStatus: GitFileChangeStatus | null;
+} | null {
   if (line.startsWith("? ")) {
-    return "untracked";
+    return {
+      indexStatus: null,
+      worktreeStatus: "untracked",
+    };
   }
 
   if (line.startsWith("u ")) {
-    return "unmerged";
+    return {
+      indexStatus: "unmerged",
+      worktreeStatus: "unmerged",
+    };
   }
 
   if (!(line.startsWith("1 ") || line.startsWith("2 "))) {
@@ -93,13 +117,46 @@ function resolveFileChangeStatusFromPorcelain(line: string): GitFileChangeStatus
 
   const parts = line.trim().split(/\s+/g);
   const xy = parts[1] ?? "";
-  if (xy.includes("U")) return "unmerged";
-  if (xy.includes("R")) return "renamed";
-  if (xy.includes("C")) return "copied";
-  if (xy.includes("A")) return "added";
-  if (xy.includes("D")) return "deleted";
-  if (xy.includes("T")) return "type_changed";
-  return "modified";
+  return {
+    indexStatus: resolveFileChangeStatusFromCode(xy[0] ?? ""),
+    worktreeStatus: resolveFileChangeStatusFromCode(xy[1] ?? ""),
+  };
+}
+
+function mergeChangedFiles(input: {
+  numstatEntries: ReadonlyArray<{ path: string; insertions: number; deletions: number }>;
+  statusByPath: ReadonlyMap<string, GitFileChangeStatus>;
+}) {
+  let insertions = 0;
+  let deletions = 0;
+  const files = Array.from(input.numstatEntries, (entry) => {
+    insertions += entry.insertions;
+    deletions += entry.deletions;
+    return {
+      path: entry.path,
+      status: input.statusByPath.get(entry.path) ?? "modified",
+      insertions: entry.insertions,
+      deletions: entry.deletions,
+    };
+  });
+
+  for (const [filePath, status] of input.statusByPath) {
+    if (files.some((file) => file.path === filePath)) continue;
+    files.push({
+      path: filePath,
+      status,
+      insertions: 0,
+      deletions: 0,
+    });
+  }
+
+  files.sort((left, right) => left.path.localeCompare(right.path));
+
+  return {
+    files,
+    insertions,
+    deletions,
+  };
 }
 
 function parseBranchLine(line: string): { name: string; current: boolean } | null {
@@ -288,6 +345,12 @@ const makeGitCore = Effect.gen(function* () {
     filePath: string,
   ): Effect.Effect<boolean, GitCommandError> =>
     executeGit("GitCore.headContainsPath", cwd, ["cat-file", "-e", `HEAD:${filePath}`], {
+      allowNonZeroExit: true,
+      timeoutMs: 5_000,
+    }).pipe(Effect.map((result) => result.code === 0));
+
+  const hasHeadCommit = (cwd: string): Effect.Effect<boolean, GitCommandError> =>
+    executeGit("GitCore.hasHeadCommit", cwd, ["rev-parse", "--verify", "HEAD"], {
       allowNonZeroExit: true,
       timeoutMs: 5_000,
     }).pipe(Effect.map((result) => result.code === 0));
@@ -583,8 +646,8 @@ const makeGitCore = Effect.gen(function* () {
       let upstreamRef: string | null = null;
       let aheadCount = 0;
       let behindCount = 0;
-      let hasWorkingTreeChanges = false;
-      const changedFileStatusByPath = new Map<string, GitFileChangeStatus>();
+      const stagedStatusByPath = new Map<string, GitFileChangeStatus>();
+      const unstagedStatusByPath = new Map<string, GitFileChangeStatus>();
 
       for (const line of statusStdout.split(/\r?\n/g)) {
         if (line.startsWith("# branch.head ")) {
@@ -605,11 +668,13 @@ const makeGitCore = Effect.gen(function* () {
           continue;
         }
         if (line.trim().length > 0 && !line.startsWith("#")) {
-          hasWorkingTreeChanges = true;
           const pathValue = parsePorcelainPath(line);
-          const status = resolveFileChangeStatusFromPorcelain(line);
-          if (pathValue && status) {
-            changedFileStatusByPath.set(pathValue, status);
+          const statuses = parsePorcelainStatuses(line);
+          if (pathValue && statuses?.indexStatus) {
+            stagedStatusByPath.set(pathValue, statuses.indexStatus);
+          }
+          if (pathValue && statuses?.worktreeStatus) {
+            unstagedStatusByPath.set(pathValue, statuses.worktreeStatus);
           }
         }
       }
@@ -623,47 +688,54 @@ const makeGitCore = Effect.gen(function* () {
 
       const stagedEntries = parseNumstatEntries(stagedNumstatStdout);
       const unstagedEntries = parseNumstatEntries(unstagedNumstatStdout);
-      const fileStatMap = new Map<string, { insertions: number; deletions: number }>();
-      for (const entry of [...stagedEntries, ...unstagedEntries]) {
-        const existing = fileStatMap.get(entry.path) ?? { insertions: 0, deletions: 0 };
-        existing.insertions += entry.insertions;
-        existing.deletions += entry.deletions;
-        fileStatMap.set(entry.path, existing);
+      const staged = mergeChangedFiles({
+        numstatEntries: stagedEntries,
+        statusByPath: stagedStatusByPath,
+      });
+      const unstaged = mergeChangedFiles({
+        numstatEntries: unstagedEntries,
+        statusByPath: unstagedStatusByPath,
+      });
+      const combinedByPath = new Map<
+        string,
+        { path: string; status: GitFileChangeStatus; insertions: number; deletions: number }
+      >();
+
+      for (const file of [...staged.files, ...unstaged.files]) {
+        const existing = combinedByPath.get(file.path);
+        if (existing) {
+          existing.insertions += file.insertions;
+          existing.deletions += file.deletions;
+          if (existing.status !== file.status) {
+            existing.status = "modified";
+          }
+          continue;
+        }
+        combinedByPath.set(file.path, { ...file });
       }
 
-      let insertions = 0;
-      let deletions = 0;
-      const files = Array.from(fileStatMap.entries())
-        .map(([filePath, stat]) => {
-          insertions += stat.insertions;
-          deletions += stat.deletions;
-          return {
-            path: filePath,
-            status: changedFileStatusByPath.get(filePath) ?? "modified",
-            insertions: stat.insertions,
-            deletions: stat.deletions,
-          };
-        })
-        .toSorted((a, b) => a.path.localeCompare(b.path));
-
-      for (const [filePath, status] of changedFileStatusByPath) {
-        if (fileStatMap.has(filePath)) continue;
-        files.push({ path: filePath, status, insertions: 0, deletions: 0 });
-      }
-      files.sort((a, b) => a.path.localeCompare(b.path));
+      const workingTree = {
+        files: Array.from(combinedByPath.values()).toSorted((left, right) =>
+          left.path.localeCompare(right.path),
+        ),
+        insertions: staged.insertions + unstaged.insertions,
+        deletions: staged.deletions + unstaged.deletions,
+      };
+      const remoteUrl = yield* readConfigValue(cwd, "remote.origin.url").pipe(
+        Effect.catch(() => Effect.succeed(null)),
+      );
 
       return {
         branch,
         upstreamRef,
-        hasWorkingTreeChanges,
-        workingTree: {
-          files,
-          insertions,
-          deletions,
-        },
+        hasWorkingTreeChanges: workingTree.files.length > 0,
+        workingTree,
+        staged,
+        unstaged,
         hasUpstream: upstreamRef !== null,
         aheadCount,
         behindCount,
+        remoteUrl,
       };
     });
 
@@ -673,25 +745,40 @@ const makeGitCore = Effect.gen(function* () {
         branch: details.branch,
         hasWorkingTreeChanges: details.hasWorkingTreeChanges,
         workingTree: details.workingTree,
+        staged: details.staged,
+        unstaged: details.unstaged,
         hasUpstream: details.hasUpstream,
         aheadCount: details.aheadCount,
         behindCount: details.behindCount,
+        remoteUrl: details.remoteUrl,
         pr: null,
       })),
     );
 
   const readWorkingTreeFileDiff: GitCoreShape["readWorkingTreeFileDiff"] = (input) =>
     Effect.gen(function* () {
-      const isTrackedAtHead = yield* headContainsPath(input.cwd, input.path);
-      if (isTrackedAtHead) {
-        const diff = yield* runGitStdout("GitCore.readWorkingTreeFileDiff.head", input.cwd, [
+      if (input.scope === "staged") {
+        const diff = yield* runGitStdout("GitCore.readWorkingTreeFileDiff.staged", input.cwd, [
           "diff",
-          "HEAD",
+          "--cached",
           "--patch",
           "--minimal",
           "--",
           input.path,
         ]);
+        return {
+          path: input.path,
+          diff,
+        };
+      }
+
+      const isTrackedAtHead = yield* headContainsPath(input.cwd, input.path);
+      if (isTrackedAtHead) {
+        const args =
+          input.scope === "unstaged"
+            ? ["diff", "--patch", "--minimal", "--", input.path]
+            : ["diff", "HEAD", "--patch", "--minimal", "--", input.path];
+        const diff = yield* runGitStdout("GitCore.readWorkingTreeFileDiff.head", input.cwd, args);
         return {
           path: input.path,
           diff,
@@ -736,6 +823,38 @@ const makeGitCore = Effect.gen(function* () {
       };
     });
 
+  const stageFiles: GitCoreShape["stageFiles"] = (input) =>
+    runGit(
+      "GitCore.stageFiles",
+      input.cwd,
+      input.paths.length > 0 ? ["add", "-A", "--", ...input.paths] : ["add", "-A"],
+    );
+
+  const unstageFiles: GitCoreShape["unstageFiles"] = (input) =>
+    Effect.gen(function* () {
+      const hasHead = yield* hasHeadCommit(input.cwd);
+      const pathspecs = input.paths.length > 0 ? input.paths : ["."];
+      if (hasHead) {
+        yield* runGit("GitCore.unstageFiles.restore", input.cwd, [
+          "restore",
+          "--staged",
+          "--source=HEAD",
+          "--",
+          ...pathspecs,
+        ]);
+        return;
+      }
+
+      yield* runGit("GitCore.unstageFiles.rmCached", input.cwd, [
+        "rm",
+        "--cached",
+        "-r",
+        "--ignore-unmatch",
+        "--",
+        ...pathspecs,
+      ]);
+    });
+
   const prepareCommitContext: GitCoreShape["prepareCommitContext"] = (cwd) =>
     Effect.gen(function* () {
       yield* runGit("GitCore.prepareCommitContext.addAll", cwd, ["add", "-A"]);
@@ -778,6 +897,30 @@ const makeGitCore = Effect.gen(function* () {
       return { commitSha };
     });
 
+  const commitStaged: GitCoreShape["commitStaged"] = (input) =>
+    Effect.gen(function* () {
+      const stagedSummary = yield* runGitStdout("GitCore.commitStaged.summary", input.cwd, [
+        "diff",
+        "--cached",
+        "--name-status",
+      ]).pipe(Effect.map((stdout) => stdout.trim()));
+      if (stagedSummary.length === 0) {
+        return yield* createGitCommandError(
+          "GitCore.commitStaged",
+          input.cwd,
+          ["commit", "-m", input.message],
+          "No staged changes to commit.",
+        );
+      }
+
+      const subject = input.message.trim();
+      const { commitSha } = yield* commit(input.cwd, subject, "");
+      return {
+        commitSha,
+        subject,
+      };
+    });
+
   const pushCurrentBranch: GitCoreShape["pushCurrentBranch"] = (cwd, fallbackBranch) =>
     Effect.gen(function* () {
       const details = yield* statusDetails(cwd);
@@ -797,7 +940,7 @@ const makeGitCore = Effect.gen(function* () {
           return {
             status: "skipped_up_to_date" as const,
             branch,
-            ...(details.upstreamRef ? { upstreamBranch: details.upstreamRef } : {}),
+            upstreamBranch: details.upstreamRef,
           };
         }
 
@@ -812,6 +955,7 @@ const makeGitCore = Effect.gen(function* () {
             return {
               status: "skipped_up_to_date" as const,
               branch,
+              upstreamBranch: null,
             };
           }
 
@@ -822,6 +966,7 @@ const makeGitCore = Effect.gen(function* () {
             return {
               status: "skipped_up_to_date" as const,
               branch,
+              upstreamBranch: null,
             };
           }
         }
@@ -846,7 +991,7 @@ const makeGitCore = Effect.gen(function* () {
       return {
         status: "pushed" as const,
         branch,
-        ...(details.upstreamRef ? { upstreamBranch: details.upstreamRef } : {}),
+        upstreamBranch: details.upstreamRef,
         setUpstream: false,
       };
     });
@@ -1290,8 +1435,11 @@ const makeGitCore = Effect.gen(function* () {
     status,
     statusDetails,
     readWorkingTreeFileDiff,
+    stageFiles,
+    unstageFiles,
     prepareCommitContext,
     commit,
+    commitStaged,
     pushCurrentBranch,
     pullCurrentBranch,
     readRangeContext,

@@ -11,15 +11,19 @@ import {
 } from "./orchestration";
 import {
   GitCheckoutInput,
+  GitCommitInput,
   GitCreateBranchInput,
   GitCreateWorktreeInput,
   GitInitInput,
   GitListBranchesInput,
   GitPullInput,
+  GitPushInput,
   GitReadWorkingTreeFileDiffInput,
   GitRemoveWorktreeInput,
   GitRunStackedActionInput,
+  GitStageFilesInput,
   GitStatusInput,
+  GitUnstageFilesInput,
 } from "./git";
 import {
   TerminalClearInput,
@@ -59,8 +63,12 @@ export const WS_METHODS = {
 
   // Git methods
   gitPull: "git.pull",
+  gitPush: "git.push",
+  gitCommit: "git.commit",
   gitStatus: "git.status",
   gitReadWorkingTreeFileDiff: "git.readWorkingTreeFileDiff",
+  gitStageFiles: "git.stageFiles",
+  gitUnstageFiles: "git.unstageFiles",
   gitRunStackedAction: "git.runStackedAction",
   gitListBranches: "git.listBranches",
   gitCreateWorktree: "git.createWorktree",
@@ -126,8 +134,12 @@ const WebSocketRequestBody = Schema.Union([
 
   // Git methods
   tagRequestBody(WS_METHODS.gitPull, GitPullInput),
+  tagRequestBody(WS_METHODS.gitPush, GitPushInput),
+  tagRequestBody(WS_METHODS.gitCommit, GitCommitInput),
   tagRequestBody(WS_METHODS.gitStatus, GitStatusInput),
   tagRequestBody(WS_METHODS.gitReadWorkingTreeFileDiff, GitReadWorkingTreeFileDiffInput),
+  tagRequestBody(WS_METHODS.gitStageFiles, GitStageFilesInput),
+  tagRequestBody(WS_METHODS.gitUnstageFiles, GitUnstageFilesInput),
   tagRequestBody(WS_METHODS.gitRunStackedAction, GitRunStackedActionInput),
   tagRequestBody(WS_METHODS.gitListBranches, GitListBranchesInput),
   tagRequestBody(WS_METHODS.gitCreateWorktree, GitCreateWorktreeInput),

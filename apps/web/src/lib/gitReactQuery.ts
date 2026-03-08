@@ -10,16 +10,20 @@ const GIT_BRANCHES_REFETCH_INTERVAL_MS = 60_000;
 export const gitQueryKeys = {
   all: ["git"] as const,
   status: (cwd: string | null) => ["git", "status", cwd] as const,
-  workingTreeFileDiff: (cwd: string | null, path: string | null) =>
-    ["git", "working-tree-file-diff", cwd, path] as const,
+  workingTreeFileDiff: (cwd: string | null, path: string | null, scope: string | null) =>
+    ["git", "working-tree-file-diff", cwd, path, scope] as const,
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
 };
 
 export const gitMutationKeys = {
   init: (cwd: string | null) => ["git", "mutation", "init", cwd] as const,
   checkout: (cwd: string | null) => ["git", "mutation", "checkout", cwd] as const,
+  stageFiles: (cwd: string | null) => ["git", "mutation", "stage-files", cwd] as const,
+  unstageFiles: (cwd: string | null) => ["git", "mutation", "unstage-files", cwd] as const,
+  commit: (cwd: string | null) => ["git", "mutation", "commit", cwd] as const,
   runStackedAction: (cwd: string | null) => ["git", "mutation", "run-stacked-action", cwd] as const,
   pull: (cwd: string | null) => ["git", "mutation", "pull", cwd] as const,
+  push: (cwd: string | null) => ["git", "mutation", "push", cwd] as const,
 };
 
 export function invalidateGitQueries(queryClient: QueryClient) {
@@ -45,16 +49,21 @@ export function gitStatusQueryOptions(cwd: string | null) {
 export function gitWorkingTreeFileDiffQueryOptions(input: {
   cwd: string | null;
   path: string | null;
+  scope?: "combined" | "staged" | "unstaged";
   enabled?: boolean;
 }) {
   return queryOptions({
-    queryKey: gitQueryKeys.workingTreeFileDiff(input.cwd, input.path),
+    queryKey: gitQueryKeys.workingTreeFileDiff(input.cwd, input.path, input.scope ?? null),
     queryFn: async () => {
       const api = ensureNativeApi();
       if (!input.cwd || !input.path) {
         throw new Error("Git file diff is unavailable.");
       }
-      return api.git.readWorkingTreeFileDiff({ cwd: input.cwd, path: input.path });
+      return api.git.readWorkingTreeFileDiff({
+        cwd: input.cwd,
+        path: input.path,
+        ...(input.scope ? { scope: input.scope } : {}),
+      });
     },
     enabled: input.enabled ?? (input.cwd !== null && input.path !== null),
     staleTime: GIT_STATUS_STALE_TIME_MS,
@@ -111,6 +120,57 @@ export function gitCheckoutMutationOptions(input: {
   });
 }
 
+export function gitStageFilesMutationOptions(input: {
+  cwd: string | null;
+  queryClient: QueryClient;
+}) {
+  return mutationOptions({
+    mutationKey: gitMutationKeys.stageFiles(input.cwd),
+    mutationFn: async (paths: string[]) => {
+      const api = ensureNativeApi();
+      if (!input.cwd) throw new Error("Git staging is unavailable.");
+      return api.git.stageFiles({ cwd: input.cwd, paths });
+    },
+    onSettled: async () => {
+      await invalidateGitQueries(input.queryClient);
+    },
+  });
+}
+
+export function gitUnstageFilesMutationOptions(input: {
+  cwd: string | null;
+  queryClient: QueryClient;
+}) {
+  return mutationOptions({
+    mutationKey: gitMutationKeys.unstageFiles(input.cwd),
+    mutationFn: async (paths: string[]) => {
+      const api = ensureNativeApi();
+      if (!input.cwd) throw new Error("Git unstaging is unavailable.");
+      return api.git.unstageFiles({ cwd: input.cwd, paths });
+    },
+    onSettled: async () => {
+      await invalidateGitQueries(input.queryClient);
+    },
+  });
+}
+
+export function gitCommitMutationOptions(input: {
+  cwd: string | null;
+  queryClient: QueryClient;
+}) {
+  return mutationOptions({
+    mutationKey: gitMutationKeys.commit(input.cwd),
+    mutationFn: async (message: string) => {
+      const api = ensureNativeApi();
+      if (!input.cwd) throw new Error("Git commit is unavailable.");
+      return api.git.commit({ cwd: input.cwd, message });
+    },
+    onSettled: async () => {
+      await invalidateGitQueries(input.queryClient);
+    },
+  });
+}
+
 export function gitRunStackedActionMutationOptions(input: {
   cwd: string | null;
   queryClient: QueryClient;
@@ -148,6 +208,20 @@ export function gitPullMutationOptions(input: { cwd: string | null; queryClient:
       const api = ensureNativeApi();
       if (!input.cwd) throw new Error("Git pull is unavailable.");
       return api.git.pull({ cwd: input.cwd });
+    },
+    onSettled: async () => {
+      await invalidateGitQueries(input.queryClient);
+    },
+  });
+}
+
+export function gitPushMutationOptions(input: { cwd: string | null; queryClient: QueryClient }) {
+  return mutationOptions({
+    mutationKey: gitMutationKeys.push(input.cwd),
+    mutationFn: async () => {
+      const api = ensureNativeApi();
+      if (!input.cwd) throw new Error("Git push is unavailable.");
+      return api.git.push({ cwd: input.cwd });
     },
     onSettled: async () => {
       await invalidateGitQueries(input.queryClient);

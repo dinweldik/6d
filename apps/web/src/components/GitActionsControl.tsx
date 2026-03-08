@@ -2,17 +2,22 @@ import { FileDiff } from "@pierre/diffs/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   GitFileChangeStatus,
+  GitFileDiffScope,
   GitReadWorkingTreeFileDiffResult,
   GitStatusResult,
 } from "@t3tools/contracts";
-import { ChevronDownIcon, FileIcon, FolderIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, FileIcon, FolderIcon } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
   gitBranchesQueryOptions,
+  gitCommitMutationOptions,
   gitInitMutationOptions,
+  gitPushMutationOptions,
+  gitStageFilesMutationOptions,
   gitStatusQueryOptions,
+  gitUnstageFilesMutationOptions,
   gitWorkingTreeFileDiffQueryOptions,
 } from "../lib/gitReactQuery";
 import { resolveDiffThemeName } from "../lib/diffRendering";
@@ -24,13 +29,20 @@ import {
 import { cn } from "../lib/utils";
 import { basenameOfPath, getVscodeIconUrlForEntry } from "../vscode-icons";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Sheet, SheetPopup, SheetTrigger } from "./ui/sheet";
+import { toastManager } from "./ui/toast";
 
 interface GitActionsControlProps {
   gitCwd: string | null;
   projectName?: string;
 }
+
+type ChangeScope = Extract<GitFileDiffScope, "staged" | "unstaged">;
+type SelectedFileTarget = { path: string; scope: ChangeScope };
+type GitChangedFile = GitStatusResult["workingTree"]["files"][number];
+const EMPTY_GIT_FILES: readonly GitChangedFile[] = [];
 
 function dirnameOfPath(pathValue: string): string | null {
   const lastSlashIndex = Math.max(pathValue.lastIndexOf("/"), pathValue.lastIndexOf("\\"));
@@ -85,6 +97,17 @@ function statusLabel(status: GitFileChangeStatus): string {
   return "Modified";
 }
 
+function scopeLabel(scope: ChangeScope): string {
+  return scope === "staged" ? "Staged" : "Changes";
+}
+
+function commitShortcutLabel(): string {
+  if (typeof navigator !== "undefined" && /Mac/i.test(navigator.platform)) {
+    return "Cmd+Enter";
+  }
+  return "Ctrl+Enter";
+}
+
 function BranchDelta({
   aheadCount,
   behindCount,
@@ -104,6 +127,139 @@ function BranchDelta({
   );
 }
 
+function ChangeSection({
+  title,
+  emptyLabel,
+  files,
+  insertions,
+  deletions,
+  scope,
+  selectedTarget,
+  onSelectFile,
+  actionLabel,
+  actionPending,
+  allActionLabel,
+  onActionAll,
+  onActionFile,
+  resolvedTheme,
+}: {
+  title: string;
+  emptyLabel: string;
+  files: ReadonlyArray<GitChangedFile>;
+  insertions: number;
+  deletions: number;
+  scope: ChangeScope;
+  selectedTarget: SelectedFileTarget | null;
+  onSelectFile: (target: SelectedFileTarget) => void;
+  actionLabel: string;
+  actionPending: boolean;
+  allActionLabel: string;
+  onActionAll: () => void;
+  onActionFile: (path: string) => void;
+  resolvedTheme: "light" | "dark";
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+            {title}
+          </p>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {files.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={files.length === 0 || actionPending}
+            onClick={onActionAll}
+          >
+            {allActionLabel}
+          </Button>
+          <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-300/90">
+            +{insertions}
+          </span>
+          <span className="font-mono text-[11px] text-red-600 dark:text-red-300/90">
+            -{deletions}
+          </span>
+        </div>
+      </div>
+
+      {files.length === 0 ? (
+        <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
+          {emptyLabel}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-background/70">
+          <div className="max-h-64 overflow-y-auto p-1">
+            {files.map((file) => {
+              const selected =
+                selectedTarget?.scope === scope && selectedTarget.path === file.path;
+              const iconUrl = getVscodeIconUrlForEntry(file.path, "file", resolvedTheme);
+              const directory = dirnameOfPath(file.path);
+
+              return (
+                <div
+                  key={`${scope}:${file.path}`}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg pr-2 transition-colors",
+                    selected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left"
+                    onClick={() => onSelectFile({ path: file.path, scope })}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <img src={iconUrl} alt="" className="size-4 shrink-0" loading="lazy" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{basenameOfPath(file.path)}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {directory ?? statusLabel(file.status)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span
+                        className={cn(
+                          "w-4 text-center font-semibold text-xs",
+                          statusClassName(file.status),
+                        )}
+                      >
+                        {statusLetter(file.status)}
+                      </span>
+                      <span className="min-w-18 text-right font-mono text-[11px] text-muted-foreground">
+                        <span className="text-emerald-600 dark:text-emerald-300/90">
+                          +{file.insertions}
+                        </span>
+                        <span className="mx-1 text-muted-foreground/60">/</span>
+                        <span className="text-red-600 dark:text-red-300/90">
+                          -{file.deletions}
+                        </span>
+                      </span>
+                    </div>
+                  </button>
+                  <Button
+                    size="xs"
+                    variant={selected ? "secondary" : "ghost"}
+                    disabled={actionPending}
+                    onClick={() => onActionFile(file.path)}
+                  >
+                    {actionLabel}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SourceControlPanel({
   gitCwd,
   projectName,
@@ -115,8 +271,20 @@ function SourceControlPanel({
   branchListError,
   gitStatus,
   gitStatusError,
+  commitMessage,
+  onCommitMessageChange,
+  commitPending,
+  pushPending,
+  onCommit,
+  onPush,
+  stagePending,
+  unstagePending,
+  onStageAll,
+  onStageFile,
+  onUnstageAll,
+  onUnstageFile,
   resolvedTheme,
-  selectedFilePath,
+  selectedTarget,
   onSelectFile,
   selectedFileDiffQuery,
 }: {
@@ -128,13 +296,23 @@ function SourceControlPanel({
   initPending: boolean;
   onInitializeGit: () => void;
   branchListError: string | null;
-  gitStatus:
-    | GitStatusResult
-    | null;
+  gitStatus: GitStatusResult | null;
   gitStatusError: string | null;
+  commitMessage: string;
+  onCommitMessageChange: (value: string) => void;
+  commitPending: boolean;
+  pushPending: boolean;
+  onCommit: () => void;
+  onPush: () => void;
+  stagePending: boolean;
+  unstagePending: boolean;
+  onStageAll: () => void;
+  onStageFile: (path: string) => void;
+  onUnstageAll: () => void;
+  onUnstageFile: (path: string) => void;
   resolvedTheme: "light" | "dark";
-  selectedFilePath: string | null;
-  onSelectFile: (path: string) => void;
+  selectedTarget: SelectedFileTarget | null;
+  onSelectFile: (target: SelectedFileTarget) => void;
   selectedFileDiffQuery: {
     data: GitReadWorkingTreeFileDiffResult | undefined;
     error: unknown;
@@ -143,38 +321,54 @@ function SourceControlPanel({
   };
 }) {
   const deferredPatch = useDeferredValue(selectedFileDiffQuery.data?.diff);
+  const repositoryLabel = resolveRepositoryLabel(gitCwd, projectName);
+  const stagedFiles = gitStatus?.staged?.files ?? EMPTY_GIT_FILES;
+  const unstagedFiles =
+    gitStatus?.unstaged?.files ?? gitStatus?.workingTree.files ?? EMPTY_GIT_FILES;
   const selectedRenderablePatch = useMemo(
     () =>
       getRenderablePatch(
         deferredPatch,
-        `working-tree:${gitCwd}:${selectedFilePath ?? "none"}:${resolvedTheme}`,
+        `working-tree:${gitCwd}:${selectedTarget?.scope ?? "none"}:${selectedTarget?.path ?? "none"}:${resolvedTheme}`,
       ),
-    [deferredPatch, gitCwd, resolvedTheme, selectedFilePath],
+    [deferredPatch, gitCwd, resolvedTheme, selectedTarget?.path, selectedTarget?.scope],
   );
   const selectedFiles = useMemo(
     () => (selectedRenderablePatch?.kind === "files" ? selectedRenderablePatch.files : []),
     [selectedRenderablePatch],
   );
-  const selectedFile = useMemo(
-    () => gitStatus?.workingTree.files.find((file) => file.path === selectedFilePath) ?? null,
-    [gitStatus?.workingTree.files, selectedFilePath],
-  );
-  const repositoryLabel = resolveRepositoryLabel(gitCwd, projectName);
+  const selectedFile = useMemo(() => {
+    if (!selectedTarget) {
+      return null;
+    }
+    const files = selectedTarget.scope === "staged" ? stagedFiles : unstagedFiles;
+    return files.find((file) => file.path === selectedTarget.path) ?? null;
+  }, [selectedTarget, stagedFiles, unstagedFiles]);
   const selectedFileDiffError =
     selectedFileDiffQuery.error instanceof Error
       ? selectedFileDiffQuery.error.message
       : selectedFileDiffQuery.error
         ? "Unable to load file diff."
         : null;
+  const trimmedCommitMessage = commitMessage.trim();
+  const commitDisabled =
+    stagedFiles.length === 0 ||
+    trimmedCommitMessage.length === 0 ||
+    commitPending ||
+    stagePending ||
+    unstagePending;
+  const pushDisabled =
+    !gitStatus?.branch || pushPending || commitPending || stagePending || unstagePending;
+  const remoteUrl = gitStatus?.remoteUrl?.trim() ? gitStatus.remoteUrl : "No origin remote configured";
 
   return (
-    <div className="flex max-h-[min(82vh,52rem)] min-h-0 min-w-0 w-full flex-col gap-4">
+    <div className="flex max-h-[min(82vh,56rem)] min-h-0 min-w-0 w-full flex-col gap-4">
       <div className="space-y-1">
         <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
           Source Control
         </p>
         <p className="text-sm text-muted-foreground">
-          Review the current repository state and inspect changed files inline.
+          Stage files, commit changes, push the current branch, and inspect diffs inline.
         </p>
       </div>
 
@@ -199,7 +393,7 @@ function SourceControlPanel({
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                Repository
+                Repositories
               </p>
               {gitStatus ? (
                 <div className="flex items-center gap-2 font-mono text-[11px]">
@@ -208,16 +402,19 @@ function SourceControlPanel({
               ) : null}
             </div>
             <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card">
                     <FolderIcon className="size-4 text-foreground/80" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-0.5">
                     <p className="truncate font-medium text-foreground">{repositoryLabel}</p>
                     <p className="truncate text-sm text-muted-foreground">
                       {gitStatus?.branch ?? "Detached HEAD"}
                       {gitStatus?.hasWorkingTreeChanges ? " *" : ""}
+                    </p>
+                    <p className="truncate font-mono text-[11px] text-muted-foreground/80">
+                      {remoteUrl}
                     </p>
                   </div>
                 </div>
@@ -233,102 +430,90 @@ function SourceControlPanel({
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                Changes
+                Commit
               </p>
-              {gitStatus ? (
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {gitStatus.workingTree.files.length}
-                  </span>
-                  <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-300/90">
-                    +{gitStatus.workingTree.insertions}
-                  </span>
-                  <span className="font-mono text-[11px] text-red-600 dark:text-red-300/90">
-                    -{gitStatus.workingTree.deletions}
-                  </span>
-                </div>
-              ) : null}
+              <span className="font-mono text-[11px] text-muted-foreground/70">
+                {commitShortcutLabel()}
+              </span>
             </div>
-
-            {isLoadingStatus ? (
-              <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
-                Loading changed files...
+            <div className="space-y-3 rounded-xl border border-border/70 bg-background/70 p-3">
+              <Input
+                aria-label="Commit message"
+                autoComplete="off"
+                placeholder={`Message (${commitShortcutLabel()} to commit on "${repositoryLabel}")`}
+                value={commitMessage}
+                onChange={(event) => onCommitMessageChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !commitDisabled) {
+                    event.preventDefault();
+                    onCommit();
+                  }
+                }}
+              />
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <Button disabled={commitDisabled} onClick={onCommit}>
+                  <CheckIcon className="size-4" />
+                  {commitPending ? "Committing..." : "Commit"}
+                </Button>
+                <Button variant="outline" disabled={pushDisabled} onClick={onPush}>
+                  {pushPending
+                    ? "Pushing..."
+                    : gitStatus?.aheadCount && gitStatus.aheadCount > 0
+                      ? `Push +${gitStatus.aheadCount}`
+                      : "Push"}
+                </Button>
               </div>
-            ) : !gitStatus || gitStatus.workingTree.files.length === 0 ? (
-              <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
-                Working tree clean.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-xl border border-border/70 bg-background/70">
-                <div className="max-h-72 overflow-y-auto p-1">
-                  {gitStatus.workingTree.files.map((file) => {
-                    const selected = file.path === selectedFilePath;
-                    const iconUrl = getVscodeIconUrlForEntry(file.path, "file", resolvedTheme);
-                    const directory = dirnameOfPath(file.path);
-
-                    return (
-                      <button
-                        key={file.path}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors",
-                          selected
-                            ? "bg-accent text-accent-foreground"
-                            : "hover:bg-accent/50 text-foreground",
-                        )}
-                        onClick={() => onSelectFile(file.path)}
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <img
-                            src={iconUrl}
-                            alt=""
-                            className="size-4 shrink-0"
-                            loading="lazy"
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{basenameOfPath(file.path)}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {directory ?? statusLabel(file.status)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          <span
-                            className={cn(
-                              "w-4 text-center font-semibold text-xs",
-                              statusClassName(file.status),
-                            )}
-                          >
-                            {statusLetter(file.status)}
-                          </span>
-                          <span className="min-w-18 text-right font-mono text-[11px] text-muted-foreground">
-                            <span className="text-emerald-600 dark:text-emerald-300/90">
-                              +{file.insertions}
-                            </span>
-                            <span className="mx-1 text-muted-foreground/60">/</span>
-                            <span className="text-red-600 dark:text-red-300/90">
-                              -{file.deletions}
-                            </span>
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            </div>
           </section>
+
+          <ChangeSection
+            title="Staged Changes"
+            emptyLabel="No staged changes."
+            files={stagedFiles}
+            insertions={gitStatus?.staged?.insertions ?? 0}
+            deletions={gitStatus?.staged?.deletions ?? 0}
+            scope="staged"
+            selectedTarget={selectedTarget}
+            onSelectFile={(target) => {
+              onSelectFile(target);
+            }}
+            actionLabel="Unstage"
+            actionPending={unstagePending || commitPending}
+            allActionLabel="Unstage All"
+            onActionAll={onUnstageAll}
+            onActionFile={onUnstageFile}
+            resolvedTheme={resolvedTheme}
+          />
+
+          <ChangeSection
+            title="Changes"
+            emptyLabel={isLoadingStatus ? "Loading changed files..." : "Working tree clean."}
+            files={unstagedFiles}
+            insertions={gitStatus?.unstaged?.insertions ?? gitStatus?.workingTree.insertions ?? 0}
+            deletions={gitStatus?.unstaged?.deletions ?? gitStatus?.workingTree.deletions ?? 0}
+            scope="unstaged"
+            selectedTarget={selectedTarget}
+            onSelectFile={(target) => {
+              onSelectFile(target);
+            }}
+            actionLabel="Stage"
+            actionPending={stagePending || commitPending}
+            allActionLabel="Stage All"
+            onActionAll={onStageAll}
+            onActionFile={onStageFile}
+            resolvedTheme={resolvedTheme}
+          />
 
           {selectedFile ? (
             <section className="min-h-0 flex-1 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                  Diff Preview
+                  {scopeLabel(selectedTarget?.scope ?? "unstaged")} Diff
                 </p>
                 <button
                   type="button"
                   className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={() => onSelectFile(selectedFile.path)}
+                  onClick={() => onSelectFile(selectedTarget!)}
                 >
                   Collapse
                 </button>
@@ -342,6 +527,7 @@ function SourceControlPanel({
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{selectedFile.path}</p>
                       <p className={cn("text-xs", statusClassName(selectedFile.status))}>
+                        {scopeLabel(selectedTarget?.scope ?? "unstaged")} ·{" "}
                         {statusLabel(selectedFile.status)}
                       </p>
                     </div>
@@ -414,10 +600,17 @@ export default function GitActionsControl({ gitCwd, projectName }: GitActionsCon
   const { resolvedTheme } = useTheme();
   const isMobile = useMediaQuery("(max-width: 767px)");
   const [open, setOpen] = useState(false);
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [selectedTarget, setSelectedTarget] = useState<SelectedFileTarget | null>(null);
 
   const branchListQuery = useQuery(gitBranchesQueryOptions(gitCwd));
   const initMutation = useMutation(gitInitMutationOptions({ cwd: gitCwd, queryClient }));
+  const stageFilesMutation = useMutation(gitStageFilesMutationOptions({ cwd: gitCwd, queryClient }));
+  const unstageFilesMutation = useMutation(
+    gitUnstageFilesMutationOptions({ cwd: gitCwd, queryClient }),
+  );
+  const commitMutation = useMutation(gitCommitMutationOptions({ cwd: gitCwd, queryClient }));
+  const pushMutation = useMutation(gitPushMutationOptions({ cwd: gitCwd, queryClient }));
   const gitStatusQuery = useQuery({
     ...gitStatusQueryOptions(gitCwd),
     enabled: gitCwd !== null && branchListQuery.data?.isRepo === true,
@@ -425,29 +618,107 @@ export default function GitActionsControl({ gitCwd, projectName }: GitActionsCon
   const selectedFileDiffQuery = useQuery(
     gitWorkingTreeFileDiffQueryOptions({
       cwd: gitCwd,
-      path: selectedFilePath,
-      enabled: open && gitCwd !== null && branchListQuery.data?.isRepo === true && selectedFilePath !== null,
+      path: selectedTarget?.path ?? null,
+      enabled:
+        open &&
+        gitCwd !== null &&
+        branchListQuery.data?.isRepo === true &&
+        selectedTarget !== null,
+      ...(selectedTarget ? { scope: selectedTarget.scope } : {}),
     }),
   );
 
+  const stagedFiles = gitStatusQuery.data?.staged?.files ?? EMPTY_GIT_FILES;
+  const unstagedFiles =
+    gitStatusQuery.data?.unstaged?.files ??
+    gitStatusQuery.data?.workingTree.files ??
+    EMPTY_GIT_FILES;
+
   useEffect(() => {
     if (!open) {
-      setSelectedFilePath(null);
+      setSelectedTarget(null);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!selectedFilePath || !gitStatusQuery.data) {
+    if (!selectedTarget) {
       return;
     }
-    if (!gitStatusQuery.data.workingTree.files.some((file) => file.path === selectedFilePath)) {
-      setSelectedFilePath(null);
+    const files = selectedTarget.scope === "staged" ? stagedFiles : unstagedFiles;
+    if (!files.some((file) => file.path === selectedTarget.path)) {
+      setSelectedTarget(null);
     }
-  }, [gitStatusQuery.data, selectedFilePath]);
+  }, [selectedTarget, stagedFiles, unstagedFiles]);
+
+  useEffect(() => {
+    setCommitMessage("");
+    setSelectedTarget(null);
+  }, [gitCwd]);
 
   if (!gitCwd) {
     return null;
   }
+
+  const handleMutationError = (title: string, error: unknown) => {
+    toastManager.add({
+      type: "error",
+      title,
+      description: error instanceof Error ? error.message : "An unexpected error occurred.",
+    });
+  };
+
+  const handleStageFiles = (paths: string[]) => {
+    void stageFilesMutation.mutateAsync(paths).catch((error) => {
+      handleMutationError("Could not stage files", error);
+    });
+  };
+
+  const handleUnstageFiles = (paths: string[]) => {
+    void unstageFilesMutation.mutateAsync(paths).catch((error) => {
+      handleMutationError("Could not unstage files", error);
+    });
+  };
+
+  const handleCommit = () => {
+    const trimmedMessage = commitMessage.trim();
+    if (trimmedMessage.length === 0) {
+      toastManager.add({
+        type: "warning",
+        title: "Enter a commit message",
+      });
+      return;
+    }
+    void commitMutation
+      .mutateAsync(trimmedMessage)
+      .then((result) => {
+        setCommitMessage("");
+        toastManager.add({
+          type: "success",
+          title: "Commit created",
+          description: `${result.subject} · ${result.commitSha.slice(0, 7)}`,
+        });
+      })
+      .catch((error) => {
+        handleMutationError("Could not create commit", error);
+      });
+  };
+
+  const handlePush = () => {
+    void pushMutation
+      .mutateAsync()
+      .then((result) => {
+        toastManager.add({
+          type: result.status === "pushed" ? "success" : "info",
+          title: result.status === "pushed" ? "Branch pushed" : "Branch already up to date",
+          description: result.upstreamBranch
+            ? `${result.branch} → ${result.upstreamBranch}`
+            : result.branch,
+        });
+      })
+      .catch((error) => {
+        handleMutationError("Could not push branch", error);
+      });
+  };
 
   const trigger = (
     <Button
@@ -474,10 +745,24 @@ export default function GitActionsControl({ gitCwd, projectName }: GitActionsCon
       }
       gitStatus={gitStatusQuery.data ?? null}
       gitStatusError={gitStatusQuery.error instanceof Error ? gitStatusQuery.error.message : null}
+      commitMessage={commitMessage}
+      onCommitMessageChange={setCommitMessage}
+      commitPending={commitMutation.isPending}
+      pushPending={pushMutation.isPending}
+      onCommit={handleCommit}
+      onPush={handlePush}
+      stagePending={stageFilesMutation.isPending}
+      unstagePending={unstageFilesMutation.isPending}
+      onStageAll={() => handleStageFiles(unstagedFiles.map((file) => file.path))}
+      onStageFile={(path) => handleStageFiles([path])}
+      onUnstageAll={() => handleUnstageFiles(stagedFiles.map((file) => file.path))}
+      onUnstageFile={(path) => handleUnstageFiles([path])}
       resolvedTheme={resolvedTheme}
-      selectedFilePath={selectedFilePath}
-      onSelectFile={(path) => {
-        setSelectedFilePath((current) => (current === path ? null : path));
+      selectedTarget={selectedTarget}
+      onSelectFile={(target) => {
+        setSelectedTarget((current) =>
+          current?.path === target.path && current.scope === target.scope ? null : target,
+        );
       }}
       selectedFileDiffQuery={selectedFileDiffQuery}
       {...(projectName ? { projectName } : {})}

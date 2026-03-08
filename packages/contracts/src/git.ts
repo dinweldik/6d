@@ -31,6 +31,8 @@ export const GitFileChangeStatus = Schema.Literals([
   "unmerged",
 ]);
 export type GitFileChangeStatus = typeof GitFileChangeStatus.Type;
+export const GitFileDiffScope = Schema.Literals(["combined", "staged", "unstaged"]);
+export type GitFileDiffScope = typeof GitFileDiffScope.Type;
 
 export const GitBranch = Schema.Struct({
   name: TrimmedNonEmptyStringSchema,
@@ -57,13 +59,37 @@ export type GitStatusInput = typeof GitStatusInput.Type;
 export const GitReadWorkingTreeFileDiffInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   path: TrimmedNonEmptyStringSchema,
+  scope: Schema.optional(GitFileDiffScope),
 });
 export type GitReadWorkingTreeFileDiffInput = typeof GitReadWorkingTreeFileDiffInput.Type;
+
+export const GitStageFilesInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  paths: Schema.Array(TrimmedNonEmptyStringSchema),
+});
+export type GitStageFilesInput = typeof GitStageFilesInput.Type;
+
+export const GitUnstageFilesInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  paths: Schema.Array(TrimmedNonEmptyStringSchema),
+});
+export type GitUnstageFilesInput = typeof GitUnstageFilesInput.Type;
 
 export const GitPullInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });
 export type GitPullInput = typeof GitPullInput.Type;
+
+export const GitPushInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitPushInput = typeof GitPushInput.Type;
+
+export const GitCommitInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  message: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(10_000)),
+});
+export type GitCommitInput = typeof GitCommitInput.Type;
 
 export const GitRunStackedActionInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
@@ -121,24 +147,29 @@ const GitStatusPr = Schema.Struct({
   state: GitStatusPrState,
 });
 
+const GitChangedFile = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+  status: GitFileChangeStatus,
+  insertions: NonNegativeInt,
+  deletions: NonNegativeInt,
+});
+
+const GitChangeSet = Schema.Struct({
+  files: Schema.Array(GitChangedFile),
+  insertions: NonNegativeInt,
+  deletions: NonNegativeInt,
+});
+
 export const GitStatusResult = Schema.Struct({
   branch: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
   hasWorkingTreeChanges: Schema.Boolean,
-  workingTree: Schema.Struct({
-    files: Schema.Array(
-      Schema.Struct({
-        path: TrimmedNonEmptyStringSchema,
-        status: GitFileChangeStatus,
-        insertions: NonNegativeInt,
-        deletions: NonNegativeInt,
-      }),
-    ),
-    insertions: NonNegativeInt,
-    deletions: NonNegativeInt,
-  }),
+  workingTree: GitChangeSet,
+  staged: Schema.optional(GitChangeSet),
+  unstaged: Schema.optional(GitChangeSet),
   hasUpstream: Schema.Boolean,
   aheadCount: NonNegativeInt,
   behindCount: NonNegativeInt,
+  remoteUrl: Schema.optional(Schema.NullOr(Schema.String)),
   pr: Schema.NullOr(GitStatusPr),
 });
 export type GitStatusResult = typeof GitStatusResult.Type;
@@ -148,6 +179,12 @@ export const GitReadWorkingTreeFileDiffResult = Schema.Struct({
   diff: Schema.String,
 });
 export type GitReadWorkingTreeFileDiffResult = typeof GitReadWorkingTreeFileDiffResult.Type;
+
+export const GitCommitResult = Schema.Struct({
+  commitSha: TrimmedNonEmptyStringSchema,
+  subject: TrimmedNonEmptyStringSchema,
+});
+export type GitCommitResult = typeof GitCommitResult.Type;
 
 export const GitListBranchesResult = Schema.Struct({
   branches: Schema.Array(GitBranch),
@@ -194,3 +231,11 @@ export const GitPullResult = Schema.Struct({
   upstreamBranch: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
 });
 export type GitPullResult = typeof GitPullResult.Type;
+
+export const GitPushResult = Schema.Struct({
+  status: Schema.Literals(["pushed", "skipped_up_to_date"]),
+  branch: TrimmedNonEmptyStringSchema,
+  upstreamBranch: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
+  setUpstream: Schema.optional(Schema.Boolean),
+});
+export type GitPushResult = typeof GitPushResult.Type;

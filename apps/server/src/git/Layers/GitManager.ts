@@ -438,9 +438,12 @@ export const makeGitManager = Effect.gen(function* () {
       branch: details.branch,
       hasWorkingTreeChanges: details.hasWorkingTreeChanges,
       workingTree: details.workingTree,
+      staged: details.staged,
+      unstaged: details.unstaged,
       hasUpstream: details.hasUpstream,
       aheadCount: details.aheadCount,
       behindCount: details.behindCount,
+      remoteUrl: details.remoteUrl,
       pr,
     };
   });
@@ -519,6 +522,15 @@ export const makeGitManager = Effect.gen(function* () {
       const push = wantsPush
         ? yield* gitCore.pushCurrentBranch(input.cwd, currentBranch)
         : { status: "skipped_not_requested" as const };
+      const normalizedPush =
+        push.status === "skipped_not_requested"
+          ? push
+          : {
+              status: push.status,
+              branch: push.branch,
+              ...(push.upstreamBranch ? { upstreamBranch: push.upstreamBranch } : {}),
+              ...(push.setUpstream !== undefined ? { setUpstream: push.setUpstream } : {}),
+            };
 
       const pr = wantsPr
         ? yield* runPrStep(input.cwd, currentBranch)
@@ -528,7 +540,7 @@ export const makeGitManager = Effect.gen(function* () {
         action: input.action,
         branch: branchStep,
         commit,
-        push,
+        push: normalizedPush,
         pr,
       };
     },

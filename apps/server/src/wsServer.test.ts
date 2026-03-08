@@ -401,10 +401,7 @@ describe("WebSocket Server", () => {
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
-      gitCore?: Pick<
-        GitCoreShape,
-        "listBranches" | "initRepo" | "pullCurrentBranch" | "readWorkingTreeFileDiff"
-      >;
+      gitCore?: Partial<GitCoreShape>;
       terminalManager?: TerminalManagerShape;
     } = {},
   ): Promise<Http.Server> {

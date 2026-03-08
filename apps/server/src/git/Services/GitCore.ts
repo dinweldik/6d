@@ -10,18 +10,23 @@ import { ServiceMap } from "effect";
 import type { Effect, Scope } from "effect";
 import type {
   GitCheckoutInput,
+  GitCommitInput,
+  GitCommitResult,
   GitCreateBranchInput,
   GitCreateWorktreeInput,
   GitCreateWorktreeResult,
   GitInitInput,
   GitListBranchesInput,
   GitListBranchesResult,
+  GitPushResult,
   GitPullResult,
   GitReadWorkingTreeFileDiffInput,
   GitReadWorkingTreeFileDiffResult,
   GitRemoveWorktreeInput,
+  GitStageFilesInput,
   GitStatusInput,
   GitStatusResult,
+  GitUnstageFilesInput,
 } from "@t3tools/contracts";
 
 import type { GitCommandError } from "../Errors.ts";
@@ -33,13 +38,6 @@ export interface GitStatusDetails extends Omit<GitStatusResult, "pr"> {
 export interface GitPreparedCommitContext {
   stagedSummary: string;
   stagedPatch: string;
-}
-
-export interface GitPushResult {
-  status: "pushed" | "skipped_up_to_date";
-  branch: string;
-  upstreamBranch?: string | undefined;
-  setUpstream?: boolean | undefined;
 }
 
 export interface GitRangeContext {
@@ -80,6 +78,16 @@ export interface GitCoreShape {
   ) => Effect.Effect<GitReadWorkingTreeFileDiffResult, GitCommandError>;
 
   /**
+   * Stage one or more files, or the full working tree when no paths are provided.
+   */
+  readonly stageFiles: (input: GitStageFilesInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Unstage one or more files, or the full index when no paths are provided.
+   */
+  readonly unstageFiles: (input: GitUnstageFilesInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
    * Build staged change context for commit generation.
    */
   readonly prepareCommitContext: (
@@ -94,6 +102,13 @@ export interface GitCoreShape {
     subject: string,
     body: string,
   ) => Effect.Effect<{ commitSha: string }, GitCommandError>;
+
+  /**
+   * Create a commit from the current staged index.
+   */
+  readonly commitStaged: (
+    input: GitCommitInput,
+  ) => Effect.Effect<GitCommitResult, GitCommandError>;
 
   /**
    * Push current branch, setting upstream if needed.
