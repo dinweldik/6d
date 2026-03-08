@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas";
+import { IsoDateTime, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas";
 import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings";
 import { EditorId } from "./editor";
 import { ProviderKind } from "./orchestration";
@@ -44,6 +44,16 @@ export const ServerProviderStatus = Schema.Struct({
 export type ServerProviderStatus = typeof ServerProviderStatus.Type;
 
 const ServerProviderStatuses = Schema.Array(ServerProviderStatus);
+const TelegramChatId = TrimmedString.check(Schema.isMaxLength(256));
+const TelegramBotTokenInput = TrimmedString.check(Schema.isMaxLength(4096));
+
+export const ServerTelegramNotificationSettings = Schema.Struct({
+  chatId: TelegramChatId,
+  hasBotToken: Schema.Boolean,
+  botTokenHint: Schema.NullOr(TrimmedNonEmptyString),
+  enabled: Schema.Boolean,
+});
+export type ServerTelegramNotificationSettings = typeof ServerTelegramNotificationSettings.Type;
 
 export const ServerConfig = Schema.Struct({
   cwd: TrimmedNonEmptyString,
@@ -52,6 +62,7 @@ export const ServerConfig = Schema.Struct({
   issues: ServerConfigIssues,
   providers: ServerProviderStatuses,
   availableEditors: Schema.Array(EditorId),
+  telegramNotifications: ServerTelegramNotificationSettings,
 });
 export type ServerConfig = typeof ServerConfig.Type;
 
@@ -63,6 +74,28 @@ export const ServerUpsertKeybindingResult = Schema.Struct({
   issues: ServerConfigIssues,
 });
 export type ServerUpsertKeybindingResult = typeof ServerUpsertKeybindingResult.Type;
+
+export const ServerUpdateTelegramNotificationsInput = Schema.Struct({
+  chatId: TelegramChatId,
+  botToken: Schema.optional(TelegramBotTokenInput),
+  clearBotToken: Schema.optional(Schema.Boolean),
+});
+export type ServerUpdateTelegramNotificationsInput =
+  typeof ServerUpdateTelegramNotificationsInput.Type;
+
+export const ServerUpdateTelegramNotificationsResult = ServerTelegramNotificationSettings;
+export type ServerUpdateTelegramNotificationsResult =
+  typeof ServerUpdateTelegramNotificationsResult.Type;
+
+export const ServerSendTestTelegramNotificationInput = ServerUpdateTelegramNotificationsInput;
+export type ServerSendTestTelegramNotificationInput =
+  typeof ServerSendTestTelegramNotificationInput.Type;
+
+export const ServerSendTestTelegramNotificationResult = Schema.Struct({
+  delivered: Schema.Boolean,
+});
+export type ServerSendTestTelegramNotificationResult =
+  typeof ServerSendTestTelegramNotificationResult.Type;
 
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,

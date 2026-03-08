@@ -3628,8 +3628,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 />
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 pb-2.5 sm:flex-nowrap sm:gap-0 sm:px-3 sm:pb-3">
-                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible">
+              <div className="flex flex-col gap-2 px-2.5 pb-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-3 sm:pb-3">
+                <div className="flex min-w-0 items-center gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:flex-1 sm:overflow-visible sm:pb-0">
                   {/* Provider/model picker */}
                   <ProviderModelPicker
                     provider={selectedProvider}
@@ -3703,7 +3703,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 </div>
 
                 {/* Right side: send / stop button */}
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:shrink-0">
                   {isPreparingWorktree ? (
                     <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
                   ) : null}
@@ -4012,8 +4012,8 @@ const ChatHeader = memo(function ChatHeader({
   onToggleDiff,
 }: ChatHeaderProps) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+    <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden sm:flex-1 sm:gap-3">
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <h2
           className="min-w-0 shrink truncate text-sm font-medium text-foreground"
@@ -4032,7 +4032,7 @@ const ChatHeader = memo(function ChatHeader({
           </Badge>
         )}
       </div>
-      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-2 @sm/header-actions:gap-3">
+      <div className="@container/header-actions -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-1 sm:justify-end sm:overflow-visible sm:px-0 sm:pb-0 @sm/header-actions:gap-3">
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}

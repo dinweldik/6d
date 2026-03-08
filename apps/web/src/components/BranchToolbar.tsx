@@ -101,8 +101,8 @@ export default function BranchToolbar({
   if (!activeThreadId || !activeProject) return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pb-3 pt-1">
-      <div className="flex items-center gap-2">
+    <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1 sm:px-5">
+      <div className="flex shrink-0 items-center gap-2">
         {envLocked || activeWorktreePath ? (
           <span className="border border-transparent px-[calc(--spacing(2)-1px)] text-sm font-medium text-muted-foreground/70 sm:text-xs">
             {activeWorktreePath ? "Worktree" : "Local"}
@@ -120,16 +120,18 @@ export default function BranchToolbar({
         )}
       </div>
 
-      <BranchToolbarBranchSelector
-        activeProjectCwd={activeProject.cwd}
-        activeThreadBranch={activeThreadBranch}
-        activeWorktreePath={activeWorktreePath}
-        branchCwd={branchCwd}
-        effectiveEnvMode={effectiveEnvMode}
-        envLocked={envLocked}
-        onSetThreadBranch={setThreadBranch}
-        {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
-      />
+      <div className="flex min-w-0 max-w-full flex-1 justify-end sm:flex-none">
+        <BranchToolbarBranchSelector
+          activeProjectCwd={activeProject.cwd}
+          activeThreadBranch={activeThreadBranch}
+          activeWorktreePath={activeWorktreePath}
+          branchCwd={branchCwd}
+          effectiveEnvMode={effectiveEnvMode}
+          envLocked={envLocked}
+          onSetThreadBranch={setThreadBranch}
+          {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+        />
+      </div>
     </div>
   );
 }

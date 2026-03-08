@@ -187,6 +187,10 @@ export function createWsNativeApi(): NativeApi {
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
+      updateTelegramNotifications: (input) =>
+        transport.request(WS_METHODS.serverUpdateTelegramNotifications, input),
+      sendTestTelegramNotification: (input) =>
+        transport.request(WS_METHODS.serverSendTestTelegramNotification, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

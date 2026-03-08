@@ -73,6 +73,7 @@ import {
 import { parseBase64DataUrl } from "./imageMime.ts";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { expandHomePath } from "./os-jank.ts";
+import { TelegramNotifications } from "./telegramNotifications";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -252,7 +253,8 @@ export type ServerRuntimeServices =
   | TerminalManager
   | Keybindings
   | Open
-  | AnalyticsService;
+  | AnalyticsService
+  | TelegramNotifications;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -288,6 +290,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const gitManager = yield* GitManager;
   const terminalManager = yield* TerminalManager;
   const keybindingsManager = yield* Keybindings;
+  const telegramNotifications = yield* TelegramNotifications;
   const providerHealth = yield* ProviderHealth;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -653,10 +656,26 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   yield* Effect.addFinalizer(() => Scope.close(subscriptionsScope, Exit.void));
 
   yield* Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) =>
-    broadcastPush({
-      type: "push",
-      channel: ORCHESTRATION_WS_CHANNELS.domainEvent,
-      data: event,
+    Effect.gen(function* () {
+      yield* broadcastPush({
+        type: "push",
+        channel: ORCHESTRATION_WS_CHANNELS.domainEvent,
+        data: event,
+      });
+
+      if (
+        event.type !== "thread.turn-diff-completed" &&
+        (event.type !== "thread.activity-appended" ||
+          (event.payload.activity.kind !== "user-input.requested" &&
+            event.payload.activity.kind !== "approval.requested"))
+      ) {
+        return;
+      }
+
+      const threadId = event.payload.threadId;
+      const snapshot = yield* projectionReadModelQuery.getSnapshot();
+      const threadTitle = snapshot.threads.find((thread) => thread.id === threadId)?.title ?? null;
+      yield* telegramNotifications.sendOrchestrationNotification(event, threadTitle);
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
@@ -1035,6 +1054,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverGetConfig:
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;
+        const telegramNotificationSettings = yield* telegramNotifications.getSettingsSummary;
         return {
           cwd,
           keybindingsConfigPath,
@@ -1042,12 +1062,23 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           issues: keybindingsConfig.issues,
           providers: providerStatuses,
           availableEditors,
+          telegramNotifications: telegramNotificationSettings,
         };
 
       case WS_METHODS.serverUpsertKeybinding: {
         const body = stripRequestTag(request.body);
         const keybindingsConfig = yield* keybindingsManager.upsertKeybindingRule(body);
         return { keybindings: keybindingsConfig, issues: [] };
+      }
+
+      case WS_METHODS.serverUpdateTelegramNotifications: {
+        const body = stripRequestTag(request.body);
+        return yield* telegramNotifications.updateSettings(body);
+      }
+
+      case WS_METHODS.serverSendTestTelegramNotification: {
+        const body = stripRequestTag(request.body);
+        return yield* telegramNotifications.sendTestNotification(body);
       }
 
       default: {

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { type ProviderKind } from "@t3tools/contracts";
+import { type ProviderKind, type ServerConfig as ServerRuntimeConfig } from "@t3tools/contracts";
 import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import { ZapIcon } from "lucide-react";
 
@@ -11,14 +11,9 @@ import {
   shouldShowFastTierIcon,
   useAppSettings,
 } from "../appSettings";
-import {
-  getBrowserNotificationAvailability,
-  requestBrowserNotificationPermission,
-  type BrowserNotificationAvailability,
-} from "../browserNotifications";
 import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
-import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { ensureNativeApi } from "../nativeApi";
 import { preferredTerminalEditor } from "../terminal-links";
 import { Button } from "../components/ui/button";
@@ -91,9 +86,17 @@ function patchCustomModels(provider: ProviderKind, models: string[]) {
   }
 }
 
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return fallback;
+}
+
 function SettingsRouteView() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { settings, defaults, updateSettings } = useAppSettings();
+  const queryClient = useQueryClient();
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
@@ -105,27 +108,28 @@ function SettingsRouteView() {
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
   >({});
-  const [browserNotificationAvailability, setBrowserNotificationAvailability] =
-    useState<BrowserNotificationAvailability>(() => getBrowserNotificationAvailability());
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [clearSavedTelegramBotToken, setClearSavedTelegramBotToken] = useState(false);
+  const [telegramDraftInitialized, setTelegramDraftInitialized] = useState(false);
+  const [telegramFormStatus, setTelegramFormStatus] = useState<{
+    tone: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
   const codexServiceTier = settings.codexServiceTier;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
+  const telegramNotifications = serverConfigQuery.data?.telegramNotifications ?? null;
 
   useEffect(() => {
-    const refreshAvailability = () => {
-      setBrowserNotificationAvailability(getBrowserNotificationAvailability());
-    };
-
-    refreshAvailability();
-    window.addEventListener("focus", refreshAvailability);
-    document.addEventListener("visibilitychange", refreshAvailability);
-    return () => {
-      window.removeEventListener("focus", refreshAvailability);
-      document.removeEventListener("visibilitychange", refreshAvailability);
-    };
-  }, []);
+    if (!telegramNotifications || telegramDraftInitialized) {
+      return;
+    }
+    setTelegramChatId(telegramNotifications.chatId);
+    setTelegramDraftInitialized(true);
+  }, [telegramDraftInitialized, telegramNotifications]);
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
@@ -200,49 +204,70 @@ function SettingsRouteView() {
     [settings, updateSettings],
   );
 
-  const updateBrowserNotifications = useCallback(
-    async (checked: boolean) => {
-      if (!checked) {
-        updateSettings({ enableBrowserNotifications: false });
-        return;
-      }
+  const buildTelegramMutationInput = useCallback(() => {
+    return {
+      chatId: telegramChatId,
+      ...(telegramBotToken.trim().length > 0 ? { botToken: telegramBotToken } : {}),
+      ...(clearSavedTelegramBotToken ? { clearBotToken: true } : {}),
+    };
+  }, [clearSavedTelegramBotToken, telegramBotToken, telegramChatId]);
 
-      let availability = getBrowserNotificationAvailability();
-      if (availability === "default") {
-        availability = await requestBrowserNotificationPermission();
-        setBrowserNotificationAvailability(availability);
-      }
-
-      if (availability === "granted") {
-        updateSettings({ enableBrowserNotifications: true });
-        return;
-      }
-
-      updateSettings({ enableBrowserNotifications: false });
+  const saveTelegramSettingsMutation = useMutation({
+    mutationFn: async () => {
+      return ensureNativeApi().server.updateTelegramNotifications(buildTelegramMutationInput());
     },
-    [updateSettings],
-  );
+    onSuccess: (nextSettings) => {
+      queryClient.setQueryData<ServerRuntimeConfig>(serverQueryKeys.config(), (existing) =>
+        existing ? { ...existing, telegramNotifications: nextSettings } : existing,
+      );
+      setTelegramChatId(nextSettings.chatId);
+      setTelegramBotToken("");
+      setClearSavedTelegramBotToken(false);
+      setTelegramDraftInitialized(true);
+      setTelegramFormStatus({
+        tone: nextSettings.enabled ? "success" : "info",
+        message: nextSettings.enabled
+          ? "Telegram notifications saved. 6d will send Telegram messages when Codex finishes or needs your input."
+          : "Telegram settings saved. Add both a bot token and a user/chat ID to enable notifications.",
+      });
+    },
+    onError: (error) => {
+      setTelegramFormStatus({
+        tone: "error",
+        message: toErrorMessage(error, "Unable to save Telegram notification settings."),
+      });
+    },
+  });
 
-  const requestBrowserNotifications = useCallback(async () => {
-    const availability = await requestBrowserNotificationPermission();
-    setBrowserNotificationAvailability(availability);
-    if (availability === "granted") {
-      updateSettings({ enableBrowserNotifications: true });
-    }
-  }, [updateSettings]);
+  const sendTestTelegramNotificationMutation = useMutation({
+    mutationFn: async () => {
+      return ensureNativeApi().server.sendTestTelegramNotification(buildTelegramMutationInput());
+    },
+    onSuccess: () => {
+      setTelegramFormStatus({
+        tone: "success",
+        message: "Test Telegram notification sent.",
+      });
+    },
+    onError: (error) => {
+      setTelegramFormStatus({
+        tone: "error",
+        message: toErrorMessage(error, "Unable to send a test Telegram notification."),
+      });
+    },
+  });
 
-  const browserNotificationStatusText =
-    browserNotificationAvailability === "granted"
-      ? settings.enableBrowserNotifications
-        ? "Notifications are enabled. 6d will notify you when Codex finishes working or needs your input while the app is in the background."
-        : "Browser permission is granted. Turn on the toggle to start receiving notifications on this device."
-      : browserNotificationAvailability === "default"
-        ? "Permission has not been granted yet. Turn on the toggle or use the request button to let this browser show notifications."
-        : browserNotificationAvailability === "denied"
-          ? "Browser permission is blocked. Re-enable notifications in your browser or site settings to use this feature."
-          : browserNotificationAvailability === "insecure"
-            ? "Notifications require a secure origin. Open 6d over HTTPS or localhost to enable them on this device."
-            : "This browser does not support Web Notifications.";
+  const hasDraftTelegramBotToken = telegramBotToken.trim().length > 0;
+  const hasEffectiveTelegramBotToken = clearSavedTelegramBotToken
+    ? hasDraftTelegramBotToken
+    : hasDraftTelegramBotToken || (telegramNotifications?.hasBotToken ?? false);
+  const canSendTelegramTest =
+    telegramChatId.trim().length > 0 &&
+    hasEffectiveTelegramBotToken &&
+    !saveTelegramSettingsMutation.isPending &&
+    !sendTestTelegramNotificationMutation.isPending;
+  const isTelegramBusy =
+    saveTelegramSettingsMutation.isPending || sendTestTelegramNotificationMutation.isPending;
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
@@ -588,56 +613,150 @@ function SettingsRouteView() {
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Notifications</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Best-effort browser notifications for long-running turns when this web app is in
-                  the background.
+                  Server-side Telegram notifications for long-running turns, approvals, and user
+                  input requests.
                 </p>
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Browser notifications</p>
-                    <p className="text-xs text-muted-foreground">
-                      Notify when Codex finishes or is waiting for your approval/input.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={settings.enableBrowserNotifications}
-                    onCheckedChange={(checked) => {
-                      void updateBrowserNotifications(Boolean(checked));
+                <label htmlFor="telegram-bot-token" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">Telegram bot token</span>
+                  <Input
+                    id="telegram-bot-token"
+                    type="password"
+                    autoComplete="off"
+                    placeholder={
+                      telegramNotifications?.hasBotToken && !clearSavedTelegramBotToken
+                        ? "Leave blank to keep the saved bot token"
+                        : "123456789:AA..."
+                    }
+                    value={telegramBotToken}
+                    onChange={(event) => {
+                      setTelegramBotToken(event.target.value);
+                      setTelegramFormStatus(null);
                     }}
-                    aria-label="Enable browser notifications"
                   />
-                </div>
+                </label>
 
                 <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
-                  <p>{browserNotificationStatusText}</p>
-                  {browserNotificationAvailability === "default" ? (
+                  <p>
+                    {telegramNotifications?.hasBotToken && !clearSavedTelegramBotToken
+                      ? `Saved bot token ${telegramNotifications.botTokenHint ?? "is present"}. Leave the field blank to keep it, or enter a new token to replace it.`
+                      : clearSavedTelegramBotToken
+                        ? "The saved bot token will be removed when you save."
+                        : "The bot token is stored on the server and is never read back into the browser after it is saved."}
+                  </p>
+                  {telegramNotifications?.hasBotToken ? (
                     <div className="mt-3 flex justify-end">
                       <Button
                         size="xs"
                         variant="outline"
-                        onClick={() => void requestBrowserNotifications()}
+                        onClick={() => {
+                          setClearSavedTelegramBotToken((value) => !value);
+                          setTelegramFormStatus(null);
+                        }}
                       >
-                        Request permission
+                        {clearSavedTelegramBotToken ? "Keep saved token" : "Remove saved token"}
                       </Button>
                     </div>
                   ) : null}
                 </div>
 
-                {settings.enableBrowserNotifications !== defaults.enableBrowserNotifications ? (
-                  <div className="flex justify-end">
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      onClick={() =>
-                        updateSettings({
-                          enableBrowserNotifications: defaults.enableBrowserNotifications,
-                        })
-                      }
+                <label htmlFor="telegram-chat-id" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">Telegram user / chat ID</span>
+                  <Input
+                    id="telegram-chat-id"
+                    autoComplete="off"
+                    placeholder="123456789"
+                    value={telegramChatId}
+                    onChange={(event) => {
+                      setTelegramChatId(event.target.value);
+                      setTelegramFormStatus(null);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For direct messages, open the bot in Telegram and start it first. The test
+                    button uses the current values, even if you have not saved them yet.
+                  </p>
+                </label>
+
+                <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                  <p>
+                    {telegramNotifications?.enabled
+                      ? "Telegram notifications are active. 6d will message you when Codex finishes or needs approval/input."
+                      : "Telegram notifications are inactive until both a bot token and a user/chat ID are configured."}
+                  </p>
+                  {telegramFormStatus ? (
+                    <p
+                      className={`mt-2 ${
+                        telegramFormStatus.tone === "error"
+                          ? "text-destructive"
+                          : telegramFormStatus.tone === "success"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-muted-foreground"
+                      }`}
                     >
-                      Restore default
-                    </Button>
+                      {telegramFormStatus.message}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() => void sendTestTelegramNotificationMutation.mutateAsync()}
+                    disabled={!canSendTelegramTest}
+                  >
+                    {sendTestTelegramNotificationMutation.isPending
+                      ? "Sending..."
+                      : "Send test notification"}
+                  </Button>
+                  <Button
+                    size="xs"
+                    onClick={() => void saveTelegramSettingsMutation.mutateAsync()}
+                    disabled={isTelegramBusy}
+                  >
+                    {saveTelegramSettingsMutation.isPending ? "Saving..." : "Save settings"}
+                  </Button>
+                </div>
+                {serverConfigQuery.isLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading Telegram settings...</p>
+                ) : null}
+                {serverConfigQuery.isError ? (
+                  <p className="text-xs text-destructive">
+                    {toErrorMessage(
+                      serverConfigQuery.error,
+                      "Unable to load Telegram notification settings.",
+                    )}
+                  </p>
+                ) : null}
+                {telegramNotifications?.hasBotToken === false && telegramBotToken.trim().length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No bot token is currently saved on the server.
+                  </p>
+                ) : null}
+                {clearSavedTelegramBotToken && !hasDraftTelegramBotToken ? (
+                  <p className="text-xs text-muted-foreground">
+                    Save to remove the current token, or enter a replacement token before saving.
+                  </p>
+                ) : null}
+                {!hasEffectiveTelegramBotToken && telegramChatId.trim().length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Add a bot token before saving or sending a test notification.
+                  </p>
+                ) : null}
+                {!telegramNotifications?.enabled && telegramChatId.trim().length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Add a bot token and user/chat ID to enable notifications.
+                  </p>
+                ) : null}
+                {serverConfigQuery.isSuccess && !telegramNotifications?.enabled ? (
+                  <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                    <p>
+                      6d sends Telegram messages from the server, so delivery does not depend on
+                      the current browser tab staying active.
+                    </p>
                   </div>
                 ) : null}
               </div>

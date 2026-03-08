@@ -34,7 +34,14 @@ import type {
   TerminalSessionSnapshot,
   TerminalWriteInput,
 } from "./terminal";
-import type { ServerUpsertKeybindingInput, ServerUpsertKeybindingResult } from "./server";
+import type {
+  ServerSendTestTelegramNotificationInput,
+  ServerSendTestTelegramNotificationResult,
+  ServerUpdateTelegramNotificationsInput,
+  ServerUpdateTelegramNotificationsResult,
+  ServerUpsertKeybindingInput,
+  ServerUpsertKeybindingResult,
+} from "./server";
 import type {
   ClientOrchestrationCommand,
   OrchestrationGetFullThreadDiffInput,
@@ -143,6 +150,12 @@ export interface NativeApi {
   server: {
     getConfig: () => Promise<ServerConfig>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
+    updateTelegramNotifications: (
+      input: ServerUpdateTelegramNotificationsInput,
+    ) => Promise<ServerUpdateTelegramNotificationsResult>;
+    sendTestTelegramNotification: (
+      input: ServerSendTestTelegramNotificationInput,
+    ) => Promise<ServerSendTestTelegramNotificationResult>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

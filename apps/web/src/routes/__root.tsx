@@ -10,18 +10,10 @@ import { useEffect, useRef } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 
 import { APP_DISPLAY_NAME } from "../branding";
-import {
-  buildBrowserNotificationDescriptor,
-  findThreadTitleForNotification,
-  registerBrowserNotificationServiceWorker,
-  shouldEmitBrowserNotification,
-  showBrowserNotification,
-} from "../browserNotifications";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
-import { useAppSettings } from "../appSettings";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
@@ -57,7 +49,6 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
-        <BrowserNotificationEvents />
         <EventRouter />
         <DesktopProjectBootstrap />
         <Outlet />
@@ -301,61 +292,6 @@ function EventRouter() {
     setProjectExpanded,
     syncServerReadModel,
   ]);
-
-  return null;
-}
-
-function BrowserNotificationEvents() {
-  const {
-    settings: { enableBrowserNotifications },
-  } = useAppSettings();
-  const enabledRef = useRef(enableBrowserNotifications);
-  const latestSequenceRef = useRef(0);
-
-  enabledRef.current = enableBrowserNotifications;
-
-  useEffect(() => {
-    void registerBrowserNotificationServiceWorker().catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    const api = readNativeApi();
-    if (!api) return;
-
-    const unsubDomainEvent = api.orchestration.onDomainEvent((event) => {
-      if (event.sequence <= latestSequenceRef.current) {
-        return;
-      }
-      latestSequenceRef.current = event.sequence;
-
-      if (!enabledRef.current || !shouldEmitBrowserNotification()) {
-        return;
-      }
-
-      const threadId =
-        event.type === "thread.turn-diff-completed" || event.type === "thread.activity-appended"
-          ? event.payload.threadId
-          : null;
-      if (!threadId) {
-        return;
-      }
-
-      const threadTitle = findThreadTitleForNotification(threadId, useStore.getState().threads);
-      const descriptor = buildBrowserNotificationDescriptor({
-        event,
-        threadTitle,
-      });
-      if (!descriptor) {
-        return;
-      }
-
-      void showBrowserNotification(descriptor);
-    });
-
-    return () => {
-      unsubDomainEvent();
-    };
-  }, []);
 
   return null;
 }

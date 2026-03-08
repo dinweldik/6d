@@ -79,6 +79,13 @@ const defaultProviderStatuses: ReadonlyArray<ServerProviderStatus> = [
   },
 ];
 
+const defaultTelegramNotifications = {
+  chatId: "",
+  hasBotToken: false,
+  botTokenHint: null,
+  enabled: false,
+} as const;
+
 const defaultProviderHealthService: ProviderHealthShape = {
   getStatuses: Effect.succeed(defaultProviderStatuses),
 };
@@ -757,6 +764,7 @@ describe("WebSocket Server", () => {
       issues: [],
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
+      telegramNotifications: defaultTelegramNotifications,
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
@@ -783,6 +791,7 @@ describe("WebSocket Server", () => {
       issues: [],
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
+      telegramNotifications: defaultTelegramNotifications,
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
 
@@ -819,6 +828,7 @@ describe("WebSocket Server", () => {
       ],
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
+      telegramNotifications: defaultTelegramNotifications,
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
     expect(fs.readFileSync(keybindingsPath, "utf8")).toBe("{ not-json");
@@ -854,6 +864,7 @@ describe("WebSocket Server", () => {
       issues: Array<{ kind: string; index?: number; message: string }>;
       providers: ReadonlyArray<ServerProviderStatus>;
       availableEditors: unknown;
+      telegramNotifications: typeof defaultTelegramNotifications;
     };
     expect(result.cwd).toBe("/my/workspace");
     expect(result.keybindingsConfigPath).toBe(keybindingsPath);
@@ -874,6 +885,7 @@ describe("WebSocket Server", () => {
     expect(result.keybindings.some((entry) => entry.command === "terminal.new")).toBe(true);
     expect(result.providers).toEqual(defaultProviderStatuses);
     expectAvailableEditors(result.availableEditors);
+    expect(result.telegramNotifications).toEqual(defaultTelegramNotifications);
   });
 
   it("pushes server.configUpdated issues when keybindings file changes", async () => {
@@ -974,6 +986,7 @@ describe("WebSocket Server", () => {
       issues: [],
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
+      telegramNotifications: defaultTelegramNotifications,
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
@@ -1022,6 +1035,7 @@ describe("WebSocket Server", () => {
       issues: [],
       providers: defaultProviderStatuses,
       availableEditors: expect.any(Array),
+      telegramNotifications: defaultTelegramNotifications,
     });
     expectAvailableEditors(
       (configResponse.result as { availableEditors: unknown }).availableEditors,

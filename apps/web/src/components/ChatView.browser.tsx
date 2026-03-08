@@ -107,6 +107,12 @@ function createBaseServerConfig(): ServerConfig {
       },
     ],
     availableEditors: [],
+    telegramNotifications: {
+      chatId: "",
+      hasBotToken: false,
+      botTokenHint: null,
+      enabled: false,
+    },
   };
 }
 
