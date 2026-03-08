@@ -56,6 +56,46 @@ Checklist:
    - build web + server
    - run `npm publish --access public`
 
+## Manual npm publish from a local shell
+
+Use this when you want the latest CLI available immediately via `npx @dinweldik/6d`.
+
+Requirements:
+
+1. `NPM_TOKEN` must be available in the current shell environment.
+2. The token must be allowed to publish `@dinweldik/6d`.
+3. Run from the repository root.
+
+Command:
+
+```bash
+bun run publish:npm
+```
+
+What it does:
+
+1. Bumps `apps/server/package.json` to the next patch version by default.
+2. Runs `bun lint`.
+3. Runs `bun typecheck`.
+4. Runs `bun run build` so the packaged web client is rebuilt before publishing.
+5. Builds the npm package payload from `apps/server`.
+6. Writes a temporary `apps/server/.npmrc` from `NPM_TOKEN`.
+7. Publishes `@dinweldik/6d` to npm.
+8. Removes the temporary auth file after publish.
+
+Useful flags:
+
+- `bun run publish:npm -- --version 1.0.4`
+- `bun run publish:npm -- --bump minor`
+- `bun run publish:npm -- --dry-run --verbose`
+- `bun run publish:npm -- --otp 123456`
+
+Notes:
+
+- The local command uses only `NPM_TOKEN` for auth. It does not require `npm login`.
+- If publish fails, the helper restores `apps/server/package.json` to its original version.
+- The GitHub Actions release flow remains the preferred path for tagged releases and OIDC-based publishing.
+
 ## 1) Dry-run release without signing
 
 Use this first to validate the release pipeline.

@@ -37,6 +37,11 @@ interface PublishIconBackup {
   readonly backupPath: string;
 }
 
+interface PublishNpmRcBackup {
+  readonly npmrcPath: string;
+  readonly backupPath: string | null;
+}
+
 const PUBLISH_BACKUP_DIR_NAME = ".publish-icon-backups";
 
 const applyPublishIconOverrides = Effect.fn("applyPublishIconOverrides")(function* (
@@ -95,6 +100,52 @@ const restorePublishIconOverrides = Effect.fn("restorePublishIconOverrides")(fun
     }
     yield* fs.remove(backupDir, { recursive: true, force: true });
   }
+});
+
+const configureNpmAuthForPublish = Effect.fn("configureNpmAuthForPublish")(function* (
+  serverDir: string,
+) {
+  const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+  const token = process.env.NPM_TOKEN?.trim() ?? "";
+  if (token.length === 0) {
+    return yield* new CliError({
+      message:
+        "NPM_TOKEN is required for npm publish. Export it in the current shell before publishing.",
+    });
+  }
+
+  const backupDir = path.join(serverDir, PUBLISH_BACKUP_DIR_NAME);
+  const npmrcPath = path.join(serverDir, ".npmrc");
+  const backupPath = (yield* fs.exists(npmrcPath))
+    ? path.join(backupDir, "npmrc.publish-bak")
+    : null;
+
+  yield* fs.makeDirectory(backupDir, { recursive: true });
+  if (backupPath) {
+    yield* fs.copyFile(npmrcPath, backupPath);
+  }
+
+  const npmrcContents = `//registry.npmjs.org/:_authToken=${token}\n`;
+  yield* fs.writeFileString(npmrcPath, npmrcContents);
+  yield* Effect.log("[cli] Wrote temporary npm auth config from NPM_TOKEN");
+
+  return {
+    npmrcPath,
+    backupPath,
+  } satisfies PublishNpmRcBackup;
+});
+
+const restoreNpmAuthAfterPublish = Effect.fn("restoreNpmAuthAfterPublish")(function* (
+  backup: PublishNpmRcBackup,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  if (backup.backupPath) {
+    yield* fs.rename(backup.backupPath, backup.npmrcPath);
+    return;
+  }
+
+  yield* fs.remove(backup.npmrcPath, { force: true });
 });
 
 const applyDevelopmentIconOverrides = Effect.fn("applyDevelopmentIconOverrides")(function* (
@@ -226,10 +277,14 @@ const publishCmd = Command.make(
           yield* Effect.log("[cli] Resolved package.json for publish");
 
           const iconBackups = yield* applyPublishIconOverrides(repoRoot, serverDir);
-          return { iconBackups };
+          const npmrcBackup = yield* configureNpmAuthForPublish(serverDir);
+          return { iconBackups, npmrcBackup };
         }),
         // Use: npm publish
-        () =>
+        (resource: {
+          readonly iconBackups: ReadonlyArray<PublishIconBackup>;
+          readonly npmrcBackup: PublishNpmRcBackup;
+        }) =>
           Effect.gen(function* () {
             const args = ["publish", "--access", config.access, "--tag", config.tag];
             if (config.provenance) args.push("--provenance");
@@ -248,19 +303,31 @@ const publishCmd = Command.make(
             yield* runCommand(
               ChildProcess.make("npm", [...args], {
                 cwd: serverDir,
+                env: {
+                  ...process.env,
+                  NPM_CONFIG_USERCONFIG: resource.npmrcBackup.npmrcPath,
+                },
                 stdout: config.verbose ? "inherit" : "ignore",
                 stderr: "inherit",
               }),
             );
           }),
         // Release: restore
-        (resource: { readonly iconBackups: ReadonlyArray<PublishIconBackup> }) =>
+        (resource: {
+          readonly iconBackups: ReadonlyArray<PublishIconBackup>;
+          readonly npmrcBackup: PublishNpmRcBackup;
+        }) =>
           Effect.gen(function* () {
             yield* restorePublishIconOverrides(resource.iconBackups).pipe(
               Effect.catch((error) =>
                 Effect.logError(
                   `[cli] Failed to restore publish icon overrides: ${String(error)}`,
                 ),
+              ),
+            );
+            yield* restoreNpmAuthAfterPublish(resource.npmrcBackup).pipe(
+              Effect.catch((error) =>
+                Effect.logError(`[cli] Failed to restore temporary npm auth config: ${String(error)}`),
               ),
             );
             yield* fs.rename(backupPath, packageJsonPath);

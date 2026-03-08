@@ -31,6 +31,7 @@
     "start:desktop": "turbo run start --filter=@t3tools/desktop",
     "start:marketing": "turbo run preview --filter=@t3tools/marketing",
     "build": "turbo run build",
+    "publish:npm": "node scripts/publish-npm.ts",
     "build:marketing": "turbo run build --filter=@t3tools/marketing",
     "build:desktop": "turbo run build --filter=@t3tools/desktop --filter=@dinweldik/6d",
     "typecheck": "turbo run typecheck",

@@ -52,26 +52,26 @@ tailscale serve https://sixd-example-ws.example 3773
 
 The client rewrites `localhost` hosts to your browser’s origin and upgrades to `wss`, so just open `https://sixd.example` on your phone after both ports are forwarded. If you need to target a different WebSocket host, set `VITE_WS_URL` before running `bun run dev`.
 
-### Browser notifications
+### Notifications
 
-Notifications are available via the "Browser notifications" toggle under Settings → Notifications. Grant permission by hitting the "Request permission" button and make sure the switch is turned on. The app registers a service worker at `/browser-notifications-sw.js` so it can show messages even when the tab is in the background or the screen is locked.
+Notifications are delivered through Telegram from the server. Configure a bot token and Telegram user/chat ID under Settings → Notifications, then use the test button to verify delivery.
 
 If you see "Checkpoint ref is unavailable for turn X" while looking at the diff viewer, the server is still scanning your turn history; wait a moment and reopen the diff, or click a different turn to trigger another fetch. The query will keep retrying for a few seconds while the checkpoint becomes available.
 
 ### Publishing to npm
 
-The CLI publishes from `apps/server` and politics start at version `1.0.0`. When it is time to ship a release:
-
-1. Build the monorepo: `bun run build`.
-2. From the project root run `node apps/server/scripts/cli.ts build`.
-3. Publish with `node apps/server/scripts/cli.ts publish --tag latest --access public --verbose`.
-
-NPM requires an automation token; create one at `https://www.npmjs.com/settings/dinweldik/tokens`. Do **not** persist the token inside `~/.zshrc`. Instead, export it just for the publish command:
+Use the root publish command. It bumps `apps/server` to the next patch version by default, runs `bun lint`, runs `bun typecheck`, rebuilds the monorepo so the bundled web client is current, builds the CLI package, writes a temporary `.npmrc` from `NPM_TOKEN`, publishes `@dinweldik/6d`, and cleans up the temp auth file afterward.
 
 ```bash
-export NPM_TOKEN=<your-token>
-# …run the publish command above…
-unset NPM_TOKEN
+bun run publish:npm
 ```
 
-The publish script automatically writes the token to a temporary `.npmrc` and removes it afterward, so the credential never lands in your shell profile.
+Useful variants:
+
+- `bun run publish:npm -- --version 1.0.4`
+- `bun run publish:npm -- --bump minor`
+- `bun run publish:npm -- --dry-run --verbose`
+
+The command requires `NPM_TOKEN` in the current shell and uses only that token for npm auth during publish.
+
+See [docs/release.md](./docs/release.md) for the full release process.
