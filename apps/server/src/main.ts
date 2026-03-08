@@ -169,10 +169,7 @@ const ServerConfigLive = (input: CliInput) =>
       const staticDir = devUrl ? undefined : yield* cliConfig.resolveStaticDir;
       const { join } = yield* Path.Path;
       const keybindingsConfigPath = join(stateDir, "keybindings.json");
-      const host =
-        Option.getOrUndefined(input.host) ??
-        env.host ??
-        (mode === "desktop" ? "127.0.0.1" : undefined);
+      const host = Option.getOrUndefined(input.host) ?? env.host ?? "127.0.0.1";
 
       const config: ServerConfigShape = {
         mode,
