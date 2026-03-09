@@ -1,6 +1,6 @@
 {
   "name": "fatma-app",
-  "version": "1.0.14",
+  "version": "1.0.16",
   "repository": {
     "type": "git",
     "url": "https://github.com/dinweldik/6d",
@@ -14,7 +14,7 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "bun run src/index.ts",
+    "dev": "bun run src/index.ts --port 3774",
     "build": "node scripts/cli.ts build",
     "start": "node dist/index.mjs",
     "prepare": "effect-language-service patch",

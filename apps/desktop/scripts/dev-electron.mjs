@@ -5,7 +5,7 @@ import waitOn from "wait-on";
 
 import { desktopDir, resolveElectronPath } from "./electron-launcher.mjs";
 
-const port = Number(process.env.ELECTRON_RENDERER_PORT ?? 5733);
+const port = Number(process.env.ELECTRON_RENDERER_PORT ?? 5774);
 const devServerUrl = `http://localhost:${port}`;
 const requiredFiles = ["dist-electron/main.js", "dist-electron/preload.js", "../server/dist/index.mjs"];
 const watchedDirectories = [

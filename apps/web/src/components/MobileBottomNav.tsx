@@ -9,7 +9,7 @@ import { useStore } from "../store";
 import { cn } from "../lib/utils";
 import { useSidebar } from "./ui/sidebar";
 
-const MOBILE_BOTTOM_NAV_HEIGHT = "5.5rem";
+const MOBILE_BOTTOM_NAV_HEIGHT = "5rem";
 
 function iconClass(active: boolean): string {
   return active ? "text-foreground" : "text-muted-foreground/72";
@@ -66,14 +66,14 @@ export default function MobileBottomNav() {
   const canOpenShell = activeProjectId !== null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-area-inset-bottom)+0.65rem)]">
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 shadow-[0_-12px_32px_rgba(0,0,0,0.18)] backdrop-blur-xl">
       <nav
         aria-label="Mobile navigation"
-        className="pointer-events-auto mx-auto flex max-w-xl items-stretch gap-1.5 rounded-[1.75rem] border border-border/70 bg-background/94 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.16)] backdrop-blur-xl"
+        className="mx-auto flex w-full items-stretch gap-1.5 px-2 pt-2 pb-[calc(var(--safe-area-inset-bottom)+0.4rem)]"
       >
         <button
           type="button"
-          className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+          className="flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-[1rem] px-2 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
           onClick={() => setOpenMobile(true)}
         >
           <FolderKanbanIcon className="size-4 text-muted-foreground/80" />
@@ -82,7 +82,7 @@ export default function MobileBottomNav() {
         <button
           type="button"
           className={cn(
-            "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-medium transition-colors duration-150 hover:bg-accent hover:text-foreground",
+            "flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-[1rem] px-2 text-[11px] font-medium transition-colors duration-150 hover:bg-accent hover:text-foreground",
             chatIsActive ? "bg-accent text-foreground" : "text-muted-foreground",
           )}
           onClick={() => {
@@ -103,7 +103,7 @@ export default function MobileBottomNav() {
           type="button"
           disabled={!canOpenShell}
           className={cn(
-            "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-medium transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:opacity-40",
+            "flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-[1rem] px-2 text-[11px] font-medium transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:opacity-40",
             shellIsActive ? "bg-accent text-foreground" : "text-muted-foreground",
           )}
           onClick={() => {
@@ -120,7 +120,7 @@ export default function MobileBottomNav() {
         <button
           type="button"
           className={cn(
-            "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-medium transition-colors duration-150 hover:bg-accent hover:text-foreground",
+            "flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-[1rem] px-2 text-[11px] font-medium transition-colors duration-150 hover:bg-accent hover:text-foreground",
             settingsIsActive ? "bg-accent text-foreground" : "text-muted-foreground",
           )}
           onClick={() => {

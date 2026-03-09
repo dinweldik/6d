@@ -10,7 +10,7 @@ const webPackageJson = JSON.parse(
 ) as { version: string };
 const appVersion = webPackageJson.version;
 
-const port = Number(process.env.PORT ?? 5733);
+const port = Number(process.env.PORT ?? 5774);
 const host = process.env.FATMA_HOST?.trim() || "localhost";
 const isDesktopMode = process.env.FATMA_MODE === "desktop";
 const extraAllowedHosts =
