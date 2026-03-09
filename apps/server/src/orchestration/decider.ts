@@ -9,6 +9,7 @@ import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
   requireProject,
   requireProjectAbsent,
+  requireProjectWithoutActiveThreads,
   requireThread,
   requireThreadAbsent,
 } from "./commandInvariants.ts";
@@ -113,6 +114,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "project.delete": {
       yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      yield* requireProjectWithoutActiveThreads({
         readModel,
         command,
         projectId: command.projectId,

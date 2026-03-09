@@ -116,6 +116,10 @@ function basenameOfPath(input: string): string {
   return segments.at(-1) ?? input;
 }
 
+function isProjectDeleteBlockedByActiveThreads(message: string): boolean {
+  return message.includes("cannot be deleted while it still has");
+}
+
 interface ThreadStatusPill {
   label: "Working" | "Connecting" | "Completed" | "Pending Approval";
   colorClass: string;
@@ -872,16 +876,6 @@ export default function Sidebar() {
       const project = projects.find((entry) => entry.id === projectId);
       if (!project) return;
 
-      const projectThreads = threads.filter((thread) => thread.projectId === projectId);
-      if (projectThreads.length > 0) {
-        toastManager.add({
-          type: "warning",
-          title: "Project is not empty",
-          description: "Delete all threads in this project before deleting it.",
-        });
-        return;
-      }
-
       const confirmed = await api.dialogs.confirm(
         [`Delete project "${project.name}"?`, "This action cannot be undone."].join("\n"),
       );
@@ -902,6 +896,14 @@ export default function Sidebar() {
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error deleting project.";
         console.error("Failed to remove project", { projectId, error });
+        if (isProjectDeleteBlockedByActiveThreads(message)) {
+          toastManager.add({
+            type: "warning",
+            title: "Project is not empty",
+            description: "Delete all threads in this project before deleting it.",
+          });
+          return;
+        }
         toastManager.add({
           type: "error",
           title: `Failed to delete "${project.name}"`,
@@ -914,7 +916,6 @@ export default function Sidebar() {
       clearProjectDraftThreadId,
       getDraftThreadByProjectId,
       projects,
-      threads,
     ],
   );
 

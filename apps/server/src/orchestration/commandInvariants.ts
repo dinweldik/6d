@@ -38,6 +38,13 @@ export function listThreadsByProjectId(
   return readModel.threads.filter((thread) => thread.projectId === projectId);
 }
 
+export function listActiveThreadsByProjectId(
+  readModel: OrchestrationReadModel,
+  projectId: ProjectId,
+): ReadonlyArray<OrchestrationThread> {
+  return listThreadsByProjectId(readModel, projectId).filter((thread) => thread.deletedAt === null);
+}
+
 export function requireProject(input: {
   readonly readModel: OrchestrationReadModel;
   readonly command: OrchestrationCommand;
@@ -100,6 +107,23 @@ export function requireThreadAbsent(input: {
     invariantError(
       input.command.type,
       `Thread '${input.threadId}' already exists and cannot be created twice.`,
+    ),
+  );
+}
+
+export function requireProjectWithoutActiveThreads(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly projectId: ProjectId;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  const activeThreads = listActiveThreadsByProjectId(input.readModel, input.projectId);
+  if (activeThreads.length === 0) {
+    return Effect.void;
+  }
+  return Effect.fail(
+    invariantError(
+      input.command.type,
+      `Project '${input.projectId}' cannot be deleted while it still has ${activeThreads.length} active thread${activeThreads.length === 1 ? "" : "s"}.`,
     ),
   );
 }

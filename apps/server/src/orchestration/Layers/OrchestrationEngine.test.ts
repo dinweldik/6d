@@ -623,6 +623,73 @@ describe("OrchestrationEngine", () => {
     await system.dispose();
   });
 
+  it("allows deleting a project after its last thread is deleted", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+    const createdAt = now();
+
+    await system.run(
+      engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.makeUnsafe("cmd-project-delete-ready-create"),
+        projectId: asProjectId("project-delete-ready"),
+        title: "Delete Ready Project",
+        workspaceRoot: "/tmp/project-delete-ready",
+        defaultModel: "gpt-5-codex",
+        createdAt,
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.makeUnsafe("cmd-thread-delete-ready-create"),
+        threadId: ThreadId.makeUnsafe("thread-delete-ready"),
+        projectId: asProjectId("project-delete-ready"),
+        title: "Delete Ready Thread",
+        model: "gpt-5-codex",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      }),
+    );
+
+    await expect(
+      system.run(
+        engine.dispatch({
+          type: "project.delete",
+          commandId: CommandId.makeUnsafe("cmd-project-delete-ready-too-soon"),
+          projectId: asProjectId("project-delete-ready"),
+        }),
+      ),
+    ).rejects.toThrow("still has 1 active thread");
+
+    await system.run(
+      engine.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.makeUnsafe("cmd-thread-delete-ready-delete"),
+        threadId: ThreadId.makeUnsafe("thread-delete-ready"),
+      }),
+    );
+
+    await system.run(
+      engine.dispatch({
+        type: "project.delete",
+        commandId: CommandId.makeUnsafe("cmd-project-delete-ready-delete"),
+        projectId: asProjectId("project-delete-ready"),
+      }),
+    );
+
+    const readModel = await system.run(engine.getReadModel());
+    expect(
+      readModel.projects.find((project) => project.id === asProjectId("project-delete-ready"))
+        ?.deletedAt,
+    ).not.toBeNull();
+
+    await system.dispose();
+  });
+
   it("rejects duplicate thread creation", async () => {
     const system = await createOrchestrationSystem();
     const { engine } = system;

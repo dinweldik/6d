@@ -12,7 +12,9 @@ import { Effect } from "effect";
 
 import {
   findThreadById,
+  listActiveThreadsByProjectId,
   listThreadsByProjectId,
+  requireProjectWithoutActiveThreads,
   requireNonNegativeInteger,
   requireThread,
   requireThreadAbsent,
@@ -111,6 +113,11 @@ describe("commandInvariants", () => {
         (thread) => thread.id,
       ),
     ).toEqual([ThreadId.makeUnsafe("thread-2")]);
+    expect(
+      listActiveThreadsByProjectId(readModel, ProjectId.makeUnsafe("project-b")).map(
+        (thread) => thread.id,
+      ),
+    ).toEqual([ThreadId.makeUnsafe("thread-2")]);
   });
 
   it("requires existing thread", async () => {
@@ -196,5 +203,38 @@ describe("commandInvariants", () => {
         }),
       ),
     ).rejects.toThrow("greater than or equal to 0");
+  });
+
+  it("allows deleting projects once all of their threads are deleted", async () => {
+    const projectDeleteCommand: OrchestrationCommand = {
+      type: "project.delete",
+      commandId: CommandId.makeUnsafe("cmd-project-delete"),
+      projectId: ProjectId.makeUnsafe("project-a"),
+    };
+
+    await expect(
+      Effect.runPromise(
+        requireProjectWithoutActiveThreads({
+          readModel,
+          command: projectDeleteCommand,
+          projectId: ProjectId.makeUnsafe("project-a"),
+        }),
+      ),
+    ).rejects.toThrow("still has 1 active thread");
+
+    await Effect.runPromise(
+      requireProjectWithoutActiveThreads({
+        readModel: {
+          ...readModel,
+          threads: readModel.threads.map((thread) =>
+            thread.id === ThreadId.makeUnsafe("thread-1")
+              ? Object.assign({}, thread, { deletedAt: now })
+              : thread,
+          ),
+        },
+        command: projectDeleteCommand,
+        projectId: ProjectId.makeUnsafe("project-a"),
+      }),
+    );
   });
 });
