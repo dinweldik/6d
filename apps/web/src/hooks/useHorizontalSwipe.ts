@@ -1,34 +1,34 @@
 import { useCallback, useRef, type TouchEvent } from "react";
+
 import { isInteractiveTouchTarget } from "./touchTargets";
 
-const DEFAULT_EDGE_ACTIVATION_PX = 32;
-const DEFAULT_MIN_SWIPE_DISTANCE_PX = 72;
-const DIRECTION_LOCK_RATIO = 1.15;
+const DEFAULT_MIN_SWIPE_DISTANCE_PX = 56;
+const DEFAULT_DIRECTION_LOCK_RATIO = 1.15;
+const DEFAULT_MAX_VERTICAL_DRIFT_PX = 72;
 
-interface MobileEdgeSwipeState {
-  readonly side: "left" | "right";
+interface HorizontalSwipeState {
   readonly startX: number;
   readonly startY: number;
 }
 
-export function useMobileEdgeSwipe(input: {
+export function useHorizontalSwipe(input: {
   readonly enabled: boolean;
-  readonly leftEnabled?: boolean;
-  readonly rightEnabled?: boolean;
-  readonly onSwipeFromLeftEdge?: () => void;
-  readonly onSwipeFromRightEdge?: () => void;
-  readonly edgeActivationPx?: number;
+  readonly onSwipeLeft?: () => void;
+  readonly onSwipeRight?: () => void;
   readonly minSwipeDistancePx?: number;
+  readonly maxVerticalDriftPx?: number;
+  readonly directionLockRatio?: number;
+  readonly ignoreInteractiveTargets?: boolean;
 }) {
-  const stateRef = useRef<MobileEdgeSwipeState | null>(null);
+  const stateRef = useRef<HorizontalSwipeState | null>(null);
   const triggeredRef = useRef(false);
   const enabled = input.enabled;
-  const edgeActivationPx = input.edgeActivationPx ?? DEFAULT_EDGE_ACTIVATION_PX;
   const minSwipeDistancePx = input.minSwipeDistancePx ?? DEFAULT_MIN_SWIPE_DISTANCE_PX;
-  const leftEnabled = input.leftEnabled ?? true;
-  const onSwipeFromLeftEdge = input.onSwipeFromLeftEdge;
-  const onSwipeFromRightEdge = input.onSwipeFromRightEdge;
-  const rightEnabled = input.rightEnabled ?? true;
+  const maxVerticalDriftPx = input.maxVerticalDriftPx ?? DEFAULT_MAX_VERTICAL_DRIFT_PX;
+  const directionLockRatio = input.directionLockRatio ?? DEFAULT_DIRECTION_LOCK_RATIO;
+  const ignoreInteractiveTargets = input.ignoreInteractiveTargets ?? true;
+  const onSwipeLeft = input.onSwipeLeft;
+  const onSwipeRight = input.onSwipeRight;
 
   const clearGestureState = useCallback(() => {
     stateRef.current = null;
@@ -41,32 +41,19 @@ export function useMobileEdgeSwipe(input: {
       if (!enabled || event.touches.length !== 1) {
         return;
       }
-      if (isInteractiveTouchTarget(event.target)) {
+      if (ignoreInteractiveTargets && isInteractiveTouchTarget(event.target)) {
         return;
       }
 
       const touch = event.touches[0];
       if (!touch) return;
 
-      const rightEdgeDistance = window.innerWidth - touch.clientX;
-      const side =
-        leftEnabled && touch.clientX <= edgeActivationPx
-          ? "left"
-          : rightEnabled && rightEdgeDistance <= edgeActivationPx
-            ? "right"
-            : null;
-
-      if (!side) {
-        return;
-      }
-
       stateRef.current = {
-        side,
         startX: touch.clientX,
         startY: touch.clientY,
       };
     },
-    [clearGestureState, edgeActivationPx, enabled, leftEnabled, rightEnabled],
+    [clearGestureState, enabled, ignoreInteractiveTargets],
   );
 
   const onTouchMoveCapture = useCallback(
@@ -86,30 +73,33 @@ export function useMobileEdgeSwipe(input: {
       const absDeltaX = Math.abs(deltaX);
       const absDeltaY = Math.abs(deltaY);
 
-      if (absDeltaY > absDeltaX && absDeltaY > 12) {
+      if (absDeltaY > maxVerticalDriftPx && absDeltaY >= absDeltaX) {
         clearGestureState();
         return;
       }
       if (absDeltaX < minSwipeDistancePx) {
         return;
       }
-      if (absDeltaX < absDeltaY * DIRECTION_LOCK_RATIO) {
+      if (absDeltaX < absDeltaY * directionLockRatio) {
         return;
       }
 
-      if (gesture.side === "left" && deltaX > 0) {
-        triggeredRef.current = true;
-        onSwipeFromLeftEdge?.();
-        clearGestureState();
-        return;
+      triggeredRef.current = true;
+      if (deltaX < 0) {
+        onSwipeLeft?.();
+      } else {
+        onSwipeRight?.();
       }
-      if (gesture.side === "right" && deltaX < 0) {
-        triggeredRef.current = true;
-        onSwipeFromRightEdge?.();
-        clearGestureState();
-      }
+      clearGestureState();
     },
-    [clearGestureState, minSwipeDistancePx, onSwipeFromLeftEdge, onSwipeFromRightEdge],
+    [
+      clearGestureState,
+      directionLockRatio,
+      maxVerticalDriftPx,
+      minSwipeDistancePx,
+      onSwipeLeft,
+      onSwipeRight,
+    ],
   );
 
   const onTouchEndCapture = useCallback(() => {

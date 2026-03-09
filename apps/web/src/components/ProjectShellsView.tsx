@@ -5,12 +5,21 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@fatma/contracts";
 import { Terminal, type ITheme } from "@xterm/xterm";
-import { EllipsisIcon, PlusIcon, SquareTerminalIcon, TerminalIcon, Trash2Icon } from "lucide-react";
+import {
+  EllipsisIcon,
+  MinusIcon,
+  PlusIcon,
+  SquareTerminalIcon,
+  TerminalIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import { useMobileEdgeSwipe } from "../hooks/useMobileEdgeSwipe";
+import { useMobileViewport } from "../mobileViewport";
 import {
   isTerminalClearShortcut,
   resolveShortcutCommand,
@@ -36,10 +45,28 @@ import {
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
-import { SidebarTrigger } from "./ui/sidebar";
+import { SidebarTrigger, useSidebar } from "./ui/sidebar";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
+const DESKTOP_TERMINAL_FONT_SIZE = 12;
+const MOBILE_TERMINAL_FONT_SIZE = 15;
+const MIN_TERMINAL_FONT_SIZE = 12;
+const MAX_TERMINAL_FONT_SIZE = 18;
+
+const MOBILE_TERMINAL_ACCESSORY_ITEMS = [
+  { id: "esc", label: "Esc", data: "\u001b", title: "Send escape" },
+  { id: "tab", label: "Tab", data: "\t", title: "Send tab" },
+  { id: "ctrl-c", label: "^C", data: "\u0003", title: "Interrupt the current command" },
+  { id: "ctrl-d", label: "^D", data: "\u0004", title: "Send EOF" },
+  { id: "left", label: "←", data: "\u001b[D", title: "Move cursor left" },
+  { id: "down", label: "↓", data: "\u001b[B", title: "Move cursor down" },
+  { id: "up", label: "↑", data: "\u001b[A", title: "Move cursor up" },
+  { id: "right", label: "→", data: "\u001b[C", title: "Move cursor right" },
+] as const;
+
+function clampTerminalFontSize(fontSize: number): number {
+  return Math.max(MIN_TERMINAL_FONT_SIZE, Math.min(MAX_TERMINAL_FONT_SIZE, Math.round(fontSize)));
+}
 
 function writeSystemMessage(terminal: Terminal, message: string): void {
   terminal.write(`\r\n[shell] ${message}\r\n`);
@@ -113,18 +140,21 @@ function ShellTerminalViewport({
   cwd,
   runtimeEnv,
   focusRequestId,
+  fontSize,
 }: {
   projectId: ProjectId;
   shellId: string;
   cwd: string;
   runtimeEnv: Record<string, string>;
   focusRequestId: number;
+  fontSize: number;
 }) {
   const runtimeThreadId = useMemo(
     () => projectShellRuntimeThreadId(projectId, shellId),
     [projectId, shellId],
   );
   const containerRef = useRef<HTMLDivElement>(null);
+  const initialFontSizeRef = useRef(fontSize);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
@@ -143,8 +173,8 @@ function ShellTerminalViewport({
     const fitAddon = new FitAddon();
     const terminal = new Terminal({
       cursorBlink: true,
-      lineHeight: 1.2,
-      fontSize: 12,
+      lineHeight: initialFontSizeRef.current >= MOBILE_TERMINAL_FONT_SIZE ? 1.28 : 1.2,
+      fontSize: initialFontSizeRef.current,
       scrollback: 5_000,
       fontFamily: '"SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
       theme: terminalThemeFromApp(),
@@ -400,6 +430,27 @@ function ShellTerminalViewport({
 
   useEffect(() => {
     const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    const api = readNativeApi();
+    if (!terminal || !fitAddon || !api) {
+      return;
+    }
+
+    terminal.options.fontSize = fontSize;
+    terminal.options.lineHeight = fontSize >= MOBILE_TERMINAL_FONT_SIZE ? 1.28 : 1.2;
+    fitAddon.fit();
+    void api.terminal
+      .resize({
+        threadId: runtimeThreadId,
+        terminalId: DEFAULT_TERMINAL_ID,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      })
+      .catch(() => undefined);
+  }, [fontSize, runtimeThreadId]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
     if (!terminal) {
       return;
     }
@@ -427,7 +478,12 @@ export default function ProjectShellsView({
   shellId: string;
 }) {
   const navigate = useNavigate();
+  const mobileViewport = useMobileViewport();
+  const { openMobile: sidebarOpenMobile, setOpenMobile } = useSidebar();
   const [focusRequestId, setFocusRequestId] = useState(0);
+  const [terminalFontSize, setTerminalFontSize] = useState(() =>
+    mobileViewport.isMobile ? MOBILE_TERMINAL_FONT_SIZE : DESKTOP_TERMINAL_FONT_SIZE,
+  );
   const shellStateByProjectId = useProjectShellStore((state) => state.shellStateByProjectId);
   const collection = useMemo(
     () => selectProjectShellCollection(shellStateByProjectId, project.id),
@@ -606,27 +662,69 @@ export default function ProjectShellsView({
   const newShellShortcutLabel = shortcutLabelForCommand(keybindings, "terminal.new");
   const closeShellShortcutLabel = shortcutLabelForCommand(keybindings, "terminal.close");
   const activeShellIsRunning = collection.runningShellIds.includes(activeShell?.id ?? "");
+  const mobileEdgeSwipeHandlers = useMobileEdgeSwipe({
+    enabled: mobileViewport.isMobile,
+    rightEnabled: false,
+    leftEnabled: !sidebarOpenMobile,
+    edgeActivationPx: 24,
+    onSwipeFromLeftEdge: () => {
+      setOpenMobile(true);
+    },
+  });
+
+  useEffect(() => {
+    setTerminalFontSize((current) =>
+      current === DESKTOP_TERMINAL_FONT_SIZE || current === MOBILE_TERMINAL_FONT_SIZE
+        ? mobileViewport.isMobile
+          ? MOBILE_TERMINAL_FONT_SIZE
+          : DESKTOP_TERMINAL_FONT_SIZE
+        : current,
+    );
+  }, [mobileViewport.isMobile]);
+
+  const writeToActiveShell = useCallback(
+    async (data: string) => {
+      if (!shellRuntimeThreadId) {
+        return;
+      }
+      const api = readNativeApi();
+      if (!api) {
+        return;
+      }
+      await api.terminal.write({
+        threadId: shellRuntimeThreadId,
+        terminalId: DEFAULT_TERMINAL_ID,
+        data,
+      });
+      requestShellFocus();
+    },
+    [requestShellFocus, shellRuntimeThreadId],
+  );
 
   if (!activeShell) {
     return null;
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+    <div
+      className="flex h-full min-h-0 flex-col bg-background text-foreground"
+      {...mobileEdgeSwipeHandlers}
+      style={mobileViewport.isMobile ? { touchAction: "pan-y pinch-zoom" } : undefined}
+    >
       <header className="shrink-0 border-b border-border/70 px-3 py-3 sm:px-4">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="size-7 shrink-0 md:hidden" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="truncate text-sm font-semibold">{project.name}</h1>
+              <h1 className="truncate text-base font-semibold sm:text-sm">{project.name}</h1>
               <Badge variant="outline" className="hidden sm:inline-flex">
                 {collection.shells.length} {collection.shells.length === 1 ? "Shell" : "Shells"}
               </Badge>
             </div>
-            <p className="truncate text-xs text-muted-foreground">{activeShell.cwd}</p>
+            <p className="truncate text-sm text-muted-foreground sm:text-xs">{activeShell.cwd}</p>
           </div>
           <Button
-            size="xs"
+            size={mobileViewport.isMobile ? "sm" : "xs"}
             variant="outline"
             title={newShellShortcutLabel ? `New shell (${newShellShortcutLabel})` : "New shell"}
             onClick={() => {
@@ -640,52 +738,39 @@ export default function ProjectShellsView({
 
         <div className="mt-3 space-y-3">
           <div className="sm:hidden">
-            <Select
-              items={collection.shells.map((shell) => ({
-                label: shell.title,
-                value: shell.id,
-              }))}
-              value={activeShell.id}
-              onValueChange={(value) => {
-                if (!value || value === activeShell.id) {
-                  return;
-                }
-                void openShellAndFocus(value);
-              }}
-            >
-              <SelectTrigger aria-label="Switch shell" size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {collection.shells.map((shell) => {
-                  const isRunning = collection.runningShellIds.includes(shell.id);
-                  return (
-                    <SelectItem
-                      key={shell.id}
-                      value={shell.id}
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <SquareTerminalIcon className="size-3.5 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate">{shell.title}</div>
-                          <div className="truncate text-xs text-muted-foreground">{shell.cwd}</div>
-                        </div>
-                        <span
-                          className={cn(
-                            "shrink-0 text-[11px]",
-                            isRunning
-                              ? "text-emerald-600 dark:text-emerald-300/90"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          {isRunning ? "Live" : "Idle"}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectPopup>
-            </Select>
+            <div className="turn-chip-strip -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {collection.shells.map((shell) => {
+                const isActive = shell.id === activeShell.id;
+                const isRunning = collection.runningShellIds.includes(shell.id);
+                return (
+                  <button
+                    key={shell.id}
+                    type="button"
+                    className={cn(
+                      "flex min-w-[10rem] shrink-0 items-center gap-2 rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                      isActive
+                        ? "border-border bg-accent text-accent-foreground"
+                        : "border-border/60 bg-background/80 hover:bg-accent/60",
+                    )}
+                    onClick={() => {
+                      void openShellAndFocus(shell.id);
+                    }}
+                  >
+                    <SquareTerminalIcon className="size-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{shell.title}</div>
+                      <div className="truncate text-xs text-muted-foreground">{shell.cwd}</div>
+                    </div>
+                    <span
+                      className={cn(
+                        "inline-flex size-2.5 shrink-0 rounded-full",
+                        isRunning ? "bg-emerald-500" : "bg-muted-foreground/30",
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="hidden gap-2 overflow-x-auto pb-1 sm:flex">
@@ -722,16 +807,16 @@ export default function ProjectShellsView({
           <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-card/40 px-3 py-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="truncate text-sm font-medium">{activeShell.title}</h2>
+                <h2 className="truncate text-base font-medium sm:text-sm">{activeShell.title}</h2>
                 {activeShellIsRunning && (
                   <Badge variant="outline" className="text-emerald-600 dark:text-emerald-300/90">
                     Live
                   </Badge>
                 )}
               </div>
-              <p className="truncate text-xs text-muted-foreground">{activeShell.cwd}</p>
+              <p className="truncate text-sm text-muted-foreground sm:text-xs">{activeShell.cwd}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 sm:flex">
               <Button
                 size="icon-xs"
                 variant="outline"
@@ -797,10 +882,83 @@ export default function ProjectShellsView({
               </Button>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:hidden">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                requestShellFocus();
+              }}
+            >
+              Focus
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void interruptActiveShell();
+              }}
+            >
+              Interrupt
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void clearActiveShell();
+              }}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                void closeActiveShell();
+              }}
+            >
+              Close
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-border/70 bg-card/40 px-3 py-2 sm:hidden">
+          <div>
+            <div className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Terminal
+            </div>
+            <div className="text-sm text-muted-foreground">Phone-optimized shell controls</div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-label="Decrease terminal font size"
+              onClick={() => {
+                setTerminalFontSize((current) => clampTerminalFontSize(current - 1));
+              }}
+            >
+              <MinusIcon className="size-4" />
+            </Button>
+            <span className="min-w-9 text-center font-mono text-sm text-muted-foreground">
+              {terminalFontSize}
+            </span>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-label="Increase terminal font size"
+              onClick={() => {
+                setTerminalFontSize((current) => clampTerminalFontSize(current + 1));
+              }}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </div>
+        </div>
+
         <div className="flex min-h-0 flex-1 rounded-2xl border border-border/70 bg-card/40 p-2 shadow-sm">
           <ShellTerminalViewport
             projectId={project.id}
@@ -808,7 +966,25 @@ export default function ProjectShellsView({
             cwd={activeShell.cwd}
             runtimeEnv={activeShell.env}
             focusRequestId={focusRequestId}
+            fontSize={terminalFontSize}
           />
+        </div>
+
+        <div className="turn-chip-strip mt-2 flex gap-2 overflow-x-auto pb-[calc(var(--safe-area-inset-bottom)+0.35rem)] sm:hidden">
+          {MOBILE_TERMINAL_ACCESSORY_ITEMS.map((item) => (
+            <Button
+              key={item.id}
+              size="sm"
+              variant="outline"
+              className="min-w-11 shrink-0"
+              title={item.title}
+              onClick={() => {
+                void writeToActiveShell(item.data);
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
         </div>
       </main>
     </div>

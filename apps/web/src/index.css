@@ -64,6 +64,7 @@
 :root {
   color-scheme: light;
   --app-mobile-keyboard-inset: 0px;
+  --app-mobile-bottom-nav-height: 0px;
   --app-mobile-viewport-height: 100dvh;
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
@@ -137,6 +138,62 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+}
+
+@media (max-width: 767px) {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    letter-spacing: -0.01em;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  .chat-markdown {
+    font-size: 0.97rem;
+    line-height: 1.58;
+  }
+
+  .chat-markdown :not(pre) > code {
+    font-size: 0.8rem;
+  }
+
+  .chat-markdown pre {
+    border-radius: 0.9rem;
+    padding: 1rem;
+  }
+
+  .chat-markdown pre code {
+    font-size: 0.95rem;
+  }
+
+  .project-shell-terminal .xterm {
+    font-size: 1rem;
+  }
+
+  .project-shell-terminal .xterm-viewport {
+    overscroll-behavior: contain;
+  }
+
+  [data-mobile-timeline="true"] {
+    padding-bottom: 0.25rem;
+  }
+
+  .chat-expanded-image-overlay {
+    overscroll-behavior: contain;
+  }
+
+  .chat-expanded-image-overlay img {
+    -webkit-user-drag: none;
+  }
 }
 
 html,

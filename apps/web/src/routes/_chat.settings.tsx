@@ -12,6 +12,7 @@ import {
   useAppSettings,
 } from "../appSettings";
 import { isElectron } from "../env";
+import { useMobileViewport } from "../mobileViewport";
 import { useTheme } from "../hooks/useTheme";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { ensureNativeApi } from "../nativeApi";
@@ -22,6 +23,7 @@ import { Input } from "../components/ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
 import { SidebarInset } from "~/components/ui/sidebar";
+import { cn } from "../lib/utils";
 
 const THEME_OPTIONS = [
   {
@@ -96,6 +98,7 @@ function toErrorMessage(error: unknown, fallback: string): string {
 
 function SettingsRouteView() {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const mobileViewport = useMobileViewport();
   const { settings, defaults, updateSettings } = useAppSettings();
   const queryClient = useQueryClient();
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
@@ -275,6 +278,10 @@ function SettingsRouteView() {
     pwa.latestVersion && pwa.latestVersion !== pwa.currentVersion
       ? `${pwa.currentVersion} -> ${pwa.latestVersion}`
       : pwa.currentVersion;
+  const settingsSectionClassName = cn(
+    "rounded-2xl border border-border bg-card p-5",
+    mobileViewport.isMobile && "rounded-[1.5rem] p-4",
+  );
 
   const installPwa = useCallback(() => {
     setPwaInstallStatus(null);
@@ -321,16 +328,28 @@ function SettingsRouteView() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-            <header className="space-y-1">
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto p-6",
+            mobileViewport.isMobile &&
+              "px-4 pt-[calc(var(--safe-area-inset-top)+1rem)] pb-[calc(var(--safe-area-inset-bottom)+var(--app-mobile-bottom-nav-height,0px)+1rem)]",
+          )}
+        >
+          <div className={cn("mx-auto flex w-full max-w-3xl flex-col gap-6", mobileViewport.isMobile && "gap-4")}>
+            <header
+              className={cn(
+                "space-y-1",
+                mobileViewport.isMobile &&
+                  "rounded-[1.75rem] border border-border/70 bg-card/80 px-4 py-4 shadow-[0_1px_0_rgba(0,0,0,0.02)]",
+              )}
+            >
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
               <p className="text-sm text-muted-foreground">
                 Configure app-level preferences for this device.
               </p>
             </header>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className={settingsSectionClassName}>
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Appearance</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -373,7 +392,7 @@ function SettingsRouteView() {
               </p>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className={settingsSectionClassName}>
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Codex App Server</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -431,7 +450,7 @@ function SettingsRouteView() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className={settingsSectionClassName}>
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Web App</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -482,7 +501,7 @@ function SettingsRouteView() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className={cn("flex flex-wrap justify-end gap-2", mobileViewport.isMobile && "grid grid-cols-1")}>
                   <Button
                     size="xs"
                     variant="outline"
@@ -509,7 +528,7 @@ function SettingsRouteView() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className={settingsSectionClassName}>
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Models</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -685,7 +704,7 @@ function SettingsRouteView() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className={settingsSectionClassName}>
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Responses</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -728,7 +747,7 @@ function SettingsRouteView() {
               ) : null}
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className={settingsSectionClassName}>
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Notifications</h2>
                 <p className="mt-1 text-xs text-muted-foreground">

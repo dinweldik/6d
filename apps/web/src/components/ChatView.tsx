@@ -102,6 +102,7 @@ import {
 } from "../types";
 import { basenameOfPath, getVscodeIconUrlForEntry } from "../vscode-icons";
 import { useMobileEdgeSwipe } from "../hooks/useMobileEdgeSwipe";
+import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useMobileViewport } from "../mobileViewport";
@@ -127,6 +128,7 @@ import {
   FolderClosedIcon,
   LockIcon,
   LockOpenIcon,
+  PaperclipIcon,
   Undo2Icon,
   XIcon,
   CopyIcon,
@@ -630,6 +632,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   } | null>(null);
   const pendingInteractionAnchorFrameRef = useRef<number | null>(null);
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
+  const composerImageInputRef = useRef<HTMLInputElement>(null);
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerFormHeightRef = useRef(0);
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
@@ -1913,50 +1916,71 @@ export default function ChatView({ threadId }: ChatViewProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [activeProject, openProjectShellView, runProjectScript, keybindings]);
 
-  const addComposerImages = (files: File[]) => {
-    if (!activeThreadId || files.length === 0) return;
+  const addComposerImages = useCallback(
+    (files: File[]) => {
+      if (!activeThreadId || files.length === 0) return;
 
-    const nextImages: ComposerImageAttachment[] = [];
-    let nextImageCount = composerImagesRef.current.length;
-    let error: string | null = null;
-    for (const file of files) {
-      if (!file.type.startsWith("image/")) {
-        error = `Unsupported file type for '${file.name}'. Please attach image files only.`;
-        continue;
+      const nextImages: ComposerImageAttachment[] = [];
+      let nextImageCount = composerImagesRef.current.length;
+      let error: string | null = null;
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) {
+          error = `Unsupported file type for '${file.name}'. Please attach image files only.`;
+          continue;
+        }
+        if (file.size > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+          error = `'${file.name}' exceeds the ${IMAGE_SIZE_LIMIT_LABEL} attachment limit.`;
+          continue;
+        }
+        if (nextImageCount >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
+          error = `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} images per message.`;
+          break;
+        }
+
+        const previewUrl = URL.createObjectURL(file);
+        nextImages.push({
+          type: "image",
+          id: randomUuid(),
+          name: file.name || "image",
+          mimeType: file.type,
+          sizeBytes: file.size,
+          previewUrl,
+          file,
+        });
+        nextImageCount += 1;
       }
-      if (file.size > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
-        error = `'${file.name}' exceeds the ${IMAGE_SIZE_LIMIT_LABEL} attachment limit.`;
-        continue;
+
+      if (nextImages.length === 1 && nextImages[0]) {
+        addComposerImage(nextImages[0]);
+      } else if (nextImages.length > 1) {
+        addComposerImagesToDraft(nextImages);
       }
-      if (nextImageCount >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
-        error = `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} images per message.`;
-        break;
+      setThreadError(activeThreadId, error);
+    },
+    [activeThreadId, addComposerImage, addComposerImagesToDraft, setThreadError],
+  );
+
+  const removeComposerImage = useCallback(
+    (imageId: string) => {
+      removeComposerImageFromDraft(imageId);
+    },
+    [removeComposerImageFromDraft],
+  );
+
+  const openComposerImagePicker = useCallback(() => {
+    composerImageInputRef.current?.click();
+  }, []);
+
+  const onComposerImageInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      if (files.length > 0) {
+        addComposerImages(files);
       }
-
-      const previewUrl = URL.createObjectURL(file);
-      nextImages.push({
-        type: "image",
-        id: randomUuid(),
-        name: file.name || "image",
-        mimeType: file.type,
-        sizeBytes: file.size,
-        previewUrl,
-        file,
-      });
-      nextImageCount += 1;
-    }
-
-    if (nextImages.length === 1 && nextImages[0]) {
-      addComposerImage(nextImages[0]);
-    } else if (nextImages.length > 1) {
-      addComposerImagesToDraft(nextImages);
-    }
-    setThreadError(activeThreadId, error);
-  };
-
-  const removeComposerImage = (imageId: string) => {
-    removeComposerImageFromDraft(imageId);
-  };
+      event.currentTarget.value = "";
+    },
+    [addComposerImages],
+  );
 
   const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
     const files = Array.from(event.clipboardData.files);
@@ -2991,6 +3015,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
     setExpandedImage(preview);
   }, []);
   const expandedImageItem = expandedImage ? expandedImage.images[expandedImage.index] : null;
+  const expandedImageSwipeHandlers = useHorizontalSwipe({
+    enabled: mobileViewport.isMobile && (expandedImage?.images.length ?? 0) > 1,
+    onSwipeLeft: () => {
+      navigateExpandedImage(1);
+    },
+    onSwipeRight: () => {
+      navigateExpandedImage(-1);
+    },
+    minSwipeDistancePx: 44,
+  });
   const onOpenTurnDiff = useCallback(
     (turnId: TurnId, filePath?: string) => {
       void navigate({
@@ -3023,7 +3057,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         {...mobileEdgeSwipeHandlers}
       >
         {!isElectron && (
-          <header className="border-b border-border px-3 py-2 md:hidden">
+          <header className="border-b border-border px-3 py-[calc(var(--safe-area-inset-top)+0.5rem)] md:hidden">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="size-7 shrink-0" />
               <span className="text-sm font-medium text-foreground">Threads</span>
@@ -3054,7 +3088,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
       <header
         className={cn(
           "border-b border-border px-2.5 sm:px-5",
-          isElectron ? "drag-region flex h-[52px] items-center" : "py-1.5 sm:py-3",
+          isElectron
+            ? "drag-region flex h-[52px] items-center"
+            : mobileViewport.isMobile
+              ? "pb-2 pt-[calc(var(--safe-area-inset-top)+0.45rem)]"
+              : "py-3",
         )}
       >
         <ChatHeader
@@ -3078,7 +3116,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
       {/* Messages */}
       <div
         ref={setMessagesScrollContainerRef}
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-2.5 py-2 sm:px-5 sm:py-4"
+        className={cn(
+          "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-2.5 py-2 sm:px-5 sm:py-4",
+          mobileViewport.isMobile && "px-3 py-3",
+        )}
         onScroll={onMessagesScroll}
         onClickCapture={onMessagesClickCapture}
         onWheel={onMessagesWheel}
@@ -3093,6 +3134,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         <MessagesTimeline
           key={activeThread.id}
           hasMessages={timelineEntries.length > 0}
+          isMobile={mobileViewport.isMobile}
           isWorking={isWorking}
           activeTurnInProgress={isWorking || !latestTurnSettled}
           activeTurnStartedAt={activeWorkStartedAt}
@@ -3119,7 +3161,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
       <div
         className={cn(
           "px-2 pt-0.5 sm:px-5 sm:pt-2",
-          isGitRepo ? "pb-0.5 sm:pb-1" : "pb-1.5 sm:pb-4",
+          mobileViewport.isMobile
+            ? "border-t border-border/60 bg-background/92 pb-[calc(var(--safe-area-inset-bottom)+0.5rem)] backdrop-blur-md"
+            : isGitRepo
+              ? "pb-1"
+              : "pb-4",
         )}
       >
         <form
@@ -3128,6 +3174,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
           className="mx-auto w-full min-w-0 max-w-full sm:max-w-3xl"
           data-chat-composer-form="true"
         >
+          <input
+            ref={composerImageInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={onComposerImageInputChange}
+          />
           <div
             className={`group rounded-[16px] border bg-card transition-colors duration-200 focus-within:border-ring/45 sm:rounded-[20px] ${
               isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border"
@@ -3187,11 +3241,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
               {!isComposerApprovalState &&
                 pendingUserInputs.length === 0 &&
                 composerImages.length > 0 && (
-                  <div className="mb-2.5 flex flex-wrap gap-1.5 sm:mb-3 sm:gap-2">
+                  <div className="mb-2.5 flex flex-wrap gap-2 sm:mb-3">
                     {composerImages.map((image) => (
                       <div
                         key={image.id}
-                        className="relative h-14 w-14 overflow-hidden rounded-lg border border-border/80 bg-background sm:h-16 sm:w-16"
+                        className="relative h-16 w-16 overflow-hidden rounded-xl border border-border/80 bg-background sm:h-16 sm:w-16"
                       >
                         {image.previewUrl ? (
                           <button
@@ -3288,8 +3342,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 />
               </div>
             ) : (
-              <div className="flex flex-col gap-1 px-1.5 pb-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-3 sm:pb-3">
-                <div className="flex min-w-0 items-center gap-0 overflow-x-auto pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:flex-1 sm:gap-1 sm:overflow-visible sm:pb-0">
+              <div
+                className={cn(
+                  "flex flex-col gap-1 px-1.5 pb-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-3 sm:pb-3",
+                  mobileViewport.isMobile && "gap-2 px-2 pb-2.5",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex min-w-0 items-center gap-0 overflow-x-auto pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:flex-1 sm:gap-1 sm:overflow-visible sm:pb-0",
+                    mobileViewport.isMobile && "flex-wrap gap-1.5 overflow-visible",
+                  )}
+                >
                   {/* Provider/model picker */}
                   <ProviderModelPicker
                     provider={selectedProvider}
@@ -3319,7 +3383,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   {/* Interaction mode toggle */}
                   <Button
                     variant="ghost"
-                    className="h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm"
+                    className={cn(
+                      "h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm",
+                      mobileViewport.isMobile &&
+                        "h-9 rounded-full border border-border/70 bg-background/70 px-3 text-sm text-foreground/85",
+                    )}
                     size="sm"
                     type="button"
                     onClick={toggleInteractionMode}
@@ -3341,7 +3409,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   {/* Runtime mode toggle */}
                   <Button
                     variant="ghost"
-                    className="h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm"
+                    className={cn(
+                      "h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm",
+                      mobileViewport.isMobile &&
+                        "h-9 rounded-full border border-border/70 bg-background/70 px-3 text-sm text-foreground/85",
+                    )}
                     size="sm"
                     type="button"
                     onClick={() =>
@@ -3363,7 +3435,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 </div>
 
                 {/* Right side: send / stop button */}
-                <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:gap-2">
+                <div
+                  className={cn(
+                    "flex w-full items-center justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:gap-2",
+                    mobileViewport.isMobile && "gap-2",
+                  )}
+                >
                   {mobileViewport.isMobile && (
                     <ChatProjectActions
                       activeProjectName={activeProject?.name}
@@ -3376,6 +3453,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       compact
                     />
                   )}
+                  <Button
+                    type="button"
+                    size={mobileViewport.isMobile ? "sm" : "icon-sm"}
+                    variant="outline"
+                    className={cn(
+                      mobileViewport.isMobile
+                        ? "rounded-full px-3"
+                        : "rounded-full",
+                    )}
+                    onClick={openComposerImagePicker}
+                    disabled={isConnecting || isSendBusy}
+                    aria-label="Attach images"
+                    title="Attach images"
+                  >
+                    <PaperclipIcon className="size-4" />
+                    {mobileViewport.isMobile ? <span>Add image</span> : null}
+                  </Button>
                   {isPreparingWorktree ? (
                     <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
                   ) : null}
@@ -3411,22 +3505,38 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       </Button>
                     </div>
                   ) : phase === "running" ? (
-                    <button
-                      type="button"
-                      className="flex size-8 items-center justify-center rounded-full bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
-                      onClick={() => void onInterrupt()}
-                      aria-label="Stop generation"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="currentColor"
-                        aria-hidden="true"
+                    mobileViewport.isMobile ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="h-10 rounded-full px-4"
+                        onClick={() => void onInterrupt()}
                       >
-                        <rect x="2" y="2" width="8" height="8" rx="1.5" />
-                      </svg>
-                    </button>
+                        <span
+                          aria-hidden="true"
+                          className="inline-block size-2.5 rounded-[3px] bg-current"
+                        />
+                        <span>Stop</span>
+                      </Button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="flex size-8 items-center justify-center rounded-full bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
+                        onClick={() => void onInterrupt()}
+                        aria-label="Stop generation"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                        </svg>
+                      </button>
+                    )
                   ) : pendingUserInputs.length === 0 ? (
                     showPlanFollowUpPrompt ? (
                       prompt.trim().length > 0 ? (
@@ -3474,61 +3584,102 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         </div>
                       )
                     ) : (
-                      <button
-                        type="submit"
-                        className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
-                        disabled={
-                          isSendBusy ||
-                          isConnecting ||
-                          (!prompt.trim() && composerImages.length === 0)
-                        }
-                        aria-label={
-                          isConnecting
-                            ? "Connecting"
-                            : isPreparingWorktree
-                              ? "Preparing worktree"
-                              : isSendBusy
-                                ? "Sending"
-                                : "Send message"
-                        }
-                      >
-                        {isConnecting || isSendBusy ? (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            className="animate-spin"
-                            aria-hidden="true"
-                          >
-                            <circle
-                              cx="7"
-                              cy="7"
-                              r="5.5"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeDasharray="20 12"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </button>
+                      mobileViewport.isMobile ? (
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className="h-10 rounded-full px-4"
+                          disabled={
+                            isSendBusy ||
+                            isConnecting ||
+                            (!prompt.trim() && composerImages.length === 0)
+                          }
+                          aria-label={
+                            isConnecting
+                              ? "Connecting"
+                              : isPreparingWorktree
+                                ? "Preparing worktree"
+                                : isSendBusy
+                                  ? "Sending"
+                                  : "Send message"
+                          }
+                        >
+                          {isConnecting || isSendBusy ? "Sending..." : "Send"}
+                          {!isConnecting && !isSendBusy ? (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : null}
+                        </Button>
+                      ) : (
+                        <button
+                          type="submit"
+                          className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                          disabled={
+                            isSendBusy ||
+                            isConnecting ||
+                            (!prompt.trim() && composerImages.length === 0)
+                          }
+                          aria-label={
+                            isConnecting
+                              ? "Connecting"
+                              : isPreparingWorktree
+                                ? "Preparing worktree"
+                                : isSendBusy
+                                  ? "Sending"
+                                  : "Send message"
+                          }
+                        >
+                          {isConnecting || isSendBusy ? (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                              className="animate-spin"
+                              aria-hidden="true"
+                            >
+                              <circle
+                                cx="7"
+                                cy="7"
+                                r="5.5"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeDasharray="20 12"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          )}
+                        </button>
+                      )
                     )
                   ) : null}
                 </div>
@@ -3549,10 +3700,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {expandedImage && expandedImageItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 [-webkit-app-region:no-drag]"
+          className={cn(
+            "chat-expanded-image-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 [-webkit-app-region:no-drag]",
+            mobileViewport.isMobile &&
+              "px-3 pt-[calc(var(--safe-area-inset-top)+0.75rem)] pb-[calc(var(--safe-area-inset-bottom)+1rem)]",
+          )}
           role="dialog"
           aria-modal="true"
           aria-label="Expanded image preview"
+          {...expandedImageSwipeHandlers}
         >
           <button
             type="button"
@@ -3565,7 +3721,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
               type="button"
               size="icon"
               variant="ghost"
-              className="absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:left-6"
+              className={cn(
+                "absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:left-6",
+                mobileViewport.isMobile && "left-3 h-11 w-11 rounded-full border border-white/15 bg-black/30 backdrop-blur-sm",
+              )}
               aria-label="Previous image"
               onClick={() => {
                 navigateExpandedImage(-1);
@@ -3574,12 +3733,21 @@ export default function ChatView({ threadId }: ChatViewProps) {
               <ChevronLeftIcon className="size-5" />
             </Button>
           )}
-          <div className="relative isolate z-10 max-h-[92vh] max-w-[92vw]">
+          <div
+            className={cn(
+              "relative isolate z-10 max-h-[92vh] max-w-[92vw]",
+              mobileViewport.isMobile && "w-full max-w-full",
+            )}
+          >
             <Button
               type="button"
               size="icon-xs"
               variant="ghost"
-              className="absolute right-2 top-2"
+              className={cn(
+                "absolute right-2 top-2",
+                mobileViewport.isMobile &&
+                  "right-0 top-0 h-10 w-10 rounded-full border border-white/15 bg-black/30 text-white hover:bg-white/10",
+              )}
               onClick={closeExpandedImage}
               aria-label="Close image preview"
             >
@@ -3588,22 +3756,37 @@ export default function ChatView({ threadId }: ChatViewProps) {
             <img
               src={expandedImageItem.src}
               alt={expandedImageItem.name}
-              className="max-h-[86vh] max-w-[92vw] select-none rounded-lg border border-border/70 bg-background object-contain shadow-2xl"
+              className={cn(
+                "max-h-[86vh] max-w-[92vw] select-none rounded-lg border border-border/70 bg-background object-contain shadow-2xl",
+                mobileViewport.isMobile && "max-h-[78dvh] w-full rounded-2xl",
+              )}
               draggable={false}
+              style={mobileViewport.isMobile ? { touchAction: "pan-y pinch-zoom" } : undefined}
             />
-            <p className="mt-2 max-w-[92vw] truncate text-center text-xs text-muted-foreground/80">
+            <p
+              className={cn(
+                "mt-2 max-w-[92vw] truncate text-center text-xs text-muted-foreground/80",
+                mobileViewport.isMobile && "max-w-full px-3 text-sm text-white/75",
+              )}
+            >
               {expandedImageItem.name}
               {expandedImage.images.length > 1
                 ? ` (${expandedImage.index + 1}/${expandedImage.images.length})`
                 : ""}
             </p>
+            {mobileViewport.isMobile && expandedImage.images.length > 1 ? (
+              <p className="mt-1 text-center text-[11px] text-white/55">Swipe to browse</p>
+            ) : null}
           </div>
           {expandedImage.images.length > 1 && (
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              className="absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:right-6"
+              className={cn(
+                "absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:right-6",
+                mobileViewport.isMobile && "right-3 h-11 w-11 rounded-full border border-white/15 bg-black/30 backdrop-blur-sm",
+              )}
               aria-label="Next image"
               onClick={() => {
                 navigateExpandedImage(1);
@@ -4335,6 +4518,7 @@ const ProposedPlanCard = memo(function ProposedPlanCard({
 
 interface MessagesTimelineProps {
   hasMessages: boolean;
+  isMobile: boolean;
   isWorking: boolean;
   activeTurnInProgress: boolean;
   activeTurnStartedAt: string | null;
@@ -4389,6 +4573,7 @@ function estimateTimelineProposedPlanHeight(proposedPlan: TimelineProposedPlan):
 
 const MessagesTimeline = memo(function MessagesTimeline({
   hasMessages,
+  isMobile,
   isWorking,
   activeTurnInProgress,
   activeTurnStartedAt,
@@ -4603,7 +4788,7 @@ const MessagesTimeline = memo(function MessagesTimeline({
 
   const renderRowContent = (row: TimelineRow) => (
     <div
-      className="pb-4"
+      className={cn("pb-4", isMobile && "pb-5")}
       data-timeline-row-kind={row.kind}
       data-message-id={row.kind === "message" ? row.message.id : undefined}
       data-message-role={row.kind === "message" ? row.message.role : undefined}
@@ -4629,9 +4814,19 @@ const MessagesTimeline = memo(function MessagesTimeline({
               : `Work log (${groupedEntries.length})`;
 
           return (
-            <div className="rounded-lg border border-border/80 bg-card/45 px-3 py-2">
+            <div
+              className={cn(
+                "rounded-lg border border-border/80 bg-card/45 px-3 py-2",
+                isMobile && "rounded-2xl px-4 py-3",
+              )}
+            >
               <div className="mb-1.5 flex items-center justify-between gap-3">
-                <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
+                <p
+                  className={cn(
+                    "text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65",
+                    isMobile && "text-[11px]",
+                  )}
+                >
                   {groupLabel}
                 </p>
                 {hasOverflow && (
@@ -4699,9 +4894,22 @@ const MessagesTimeline = memo(function MessagesTimeline({
           const canRevertAgentWork = revertTurnCountByUserMessageId.has(row.message.id);
           return (
             <div className="flex justify-end">
-              <div className="group relative max-w-[80%] rounded-2xl rounded-br-sm border border-border bg-secondary px-4 py-3">
+              <div
+                className={cn(
+                  "group relative border border-border bg-secondary",
+                  isMobile
+                    ? "max-w-[92%] rounded-[1.35rem] rounded-br-md px-4 py-3.5 shadow-sm"
+                    : "max-w-[80%] rounded-2xl rounded-br-sm px-4 py-3",
+                )}
+              >
                 {userImages.length > 0 && (
-                  <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
+                  <div
+                    className={cn(
+                      "mb-2 grid gap-2",
+                      userImages.length === 1 ? "grid-cols-1" : "grid-cols-2",
+                      isMobile ? "max-w-[min(100%,22rem)]" : "max-w-[420px]",
+                    )}
+                  >
                     {userImages.map(
                       (image: NonNullable<TimelineMessage["attachments"]>[number]) => (
                         <div
@@ -4722,7 +4930,10 @@ const MessagesTimeline = memo(function MessagesTimeline({
                               <img
                                 src={image.previewUrl}
                                 alt={image.name}
-                                className="h-full max-h-[220px] w-full object-cover"
+                                className={cn(
+                                  "h-full w-full object-cover",
+                                  isMobile ? "max-h-[38vh]" : "max-h-[220px]",
+                                )}
                                 onLoad={onTimelineImageLoad}
                                 onError={onTimelineImageLoad}
                               />
@@ -4738,11 +4949,16 @@ const MessagesTimeline = memo(function MessagesTimeline({
                   </div>
                 )}
                 {row.message.text && (
-                  <pre className="whitespace-pre-wrap wrap-break-word font-mono text-sm leading-relaxed text-foreground">
+                  <pre
+                    className={cn(
+                      "whitespace-pre-wrap wrap-break-word font-mono text-foreground",
+                      isMobile ? "text-[0.96rem] leading-7" : "text-sm leading-relaxed",
+                    )}
+                  >
                     {row.message.text}
                   </pre>
                 )}
-                <div className="mt-1.5 flex items-center justify-end gap-2">
+                <div className={cn("mt-1.5 flex items-center justify-end gap-2", isMobile && "mt-2")}>
                   <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     {row.message.text && <MessageCopyButton text={row.message.text} />}
                     {canRevertAgentWork && (
@@ -4774,7 +4990,7 @@ const MessagesTimeline = memo(function MessagesTimeline({
           return (
             <>
               {row.showCompletionDivider && (
-                <div className="my-3 flex items-center gap-3">
+                <div className={cn("my-3 flex items-center gap-3", isMobile && "my-4")}>
                   <span className="h-px flex-1 bg-border" />
                   <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
                     {completionSummary ? `Response • ${completionSummary}` : "Response"}
@@ -4782,7 +4998,14 @@ const MessagesTimeline = memo(function MessagesTimeline({
                   <span className="h-px flex-1 bg-border" />
                 </div>
               )}
-              <div className="min-w-0 px-1 py-0.5">
+              <div
+                className={cn(
+                  "min-w-0",
+                  isMobile
+                    ? "rounded-[1.4rem] border border-border/60 bg-background/80 px-3.5 py-3 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+                    : "px-1 py-0.5",
+                )}
+              >
                 <ChatMarkdown
                   text={messageText}
                   cwd={markdownCwd}
@@ -4799,7 +5022,12 @@ const MessagesTimeline = memo(function MessagesTimeline({
                     allDirectoriesExpandedByTurnId[turnSummary.turnId] ?? true;
                   return (
                     <div className="mt-2 rounded-lg border border-border/80 bg-card/45 p-2.5">
-                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <div
+                        className={cn(
+                          "mb-1.5 flex items-center justify-between gap-2",
+                          isMobile && "flex-wrap gap-y-2",
+                        )}
+                      >
                         <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
                           <span>Changed files ({changedFileCountLabel})</span>
                           {hasNonZeroStat(summaryStat) && (
@@ -4812,7 +5040,7 @@ const MessagesTimeline = memo(function MessagesTimeline({
                             </>
                           )}
                         </p>
-                        <div className="flex items-center gap-1.5">
+                        <div className={cn("flex items-center gap-1.5", isMobile && "ml-auto flex-wrap")}>
                           <Button
                             type="button"
                             size="xs"
@@ -4858,7 +5086,14 @@ const MessagesTimeline = memo(function MessagesTimeline({
         })()}
 
       {row.kind === "proposed-plan" && (
-        <div className="min-w-0 px-1 py-0.5">
+        <div
+          className={cn(
+            "min-w-0",
+            isMobile
+              ? "rounded-[1.4rem] border border-border/60 bg-card/70 px-3.5 py-3 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+              : "px-1 py-0.5",
+          )}
+        >
           <ProposedPlanCard
             planMarkdown={row.proposedPlan.planMarkdown}
             cwd={markdownCwd}
@@ -4868,9 +5103,14 @@ const MessagesTimeline = memo(function MessagesTimeline({
       )}
 
       {row.kind === "working" && (
-        <div className="flex items-center gap-2 py-0.5 pl-1.5">
+        <div className={cn("flex items-center gap-2 py-0.5 pl-1.5", isMobile && "px-2 py-1")}>
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/30" />
-          <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/70">
+          <div
+            className={cn(
+              "flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/70",
+              isMobile && "text-[12px]",
+            )}
+          >
             <span className="inline-flex items-center gap-[3px]">
               <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse" />
               <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:200ms]" />
@@ -4901,7 +5141,11 @@ const MessagesTimeline = memo(function MessagesTimeline({
     <div
       ref={timelineRootRef}
       data-timeline-root="true"
-      className="mx-auto w-full min-w-0 max-w-3xl overflow-x-hidden"
+      data-mobile-timeline={isMobile ? "true" : "false"}
+      className={cn(
+        "mx-auto w-full min-w-0 overflow-x-hidden",
+        isMobile ? "max-w-none" : "max-w-3xl",
+      )}
     >
       {virtualizedRowCount > 0 && (
         <div className="relative" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>

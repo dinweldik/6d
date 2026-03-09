@@ -1,13 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
+import { useMobileViewport } from "../mobileViewport";
 import { SidebarTrigger } from "../components/ui/sidebar";
+import { cn } from "../lib/utils";
 
 function ChatIndexRouteView() {
+  const mobileViewport = useMobileViewport();
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-muted-foreground/40">
+    <div
+      className={cn(
+        "flex min-h-0 min-w-0 flex-1 flex-col bg-background text-muted-foreground/40",
+        mobileViewport.isMobile &&
+          "pb-[calc(var(--safe-area-inset-bottom)+var(--app-mobile-bottom-nav-height,0px))]",
+      )}
+    >
       {!isElectron && (
-        <header className="border-b border-border px-3 py-2 md:hidden">
+        <header
+          className={cn(
+            "border-b border-border px-3 py-2 md:hidden",
+            mobileViewport.isMobile && "px-3 py-[calc(var(--safe-area-inset-top)+0.75rem)]",
+          )}
+        >
           <div className="flex items-center gap-2">
             <SidebarTrigger className="size-7 shrink-0" />
             <span className="text-sm font-medium text-foreground">Threads</span>

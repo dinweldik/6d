@@ -25,7 +25,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { useAppSettings } from "../appSettings";
 import { isElectron } from "../env";
 import { APP_BASE_NAME } from "../branding";
-import { newCommandId, newProjectId, newThreadId } from "../lib/utils";
+import { cn, newCommandId, newProjectId, newThreadId } from "../lib/utils";
 import { useStore } from "../store";
 import {
   isChatNewLocalShortcut,
@@ -1211,10 +1211,15 @@ export default function Sidebar() {
   const isCreatingProjectFolder = createProjectDirectoryMutation.isPending;
 
   const wordmark = (
-    <div className="flex items-center gap-2">
-      <SidebarTrigger className="shrink-0 md:hidden" />
-      <div className="mt-2 ml-1 flex min-w-0 flex-1 items-center gap-1">
+    <div className={cn("flex items-center gap-2", isMobile && "items-start gap-3")}>
+      <SidebarTrigger className={cn("shrink-0 md:hidden", isMobile && "mt-0.5 size-9 rounded-xl")} />
+      <div className={cn("mt-2 ml-1 flex min-w-0 flex-1 items-center gap-1", isMobile && "mt-0 ml-0 flex-col items-start gap-0.5")}>
         <AppWordmark />
+        {isMobile ? (
+          <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground/65">
+            Projects, threads, and shells
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -1247,13 +1252,40 @@ export default function Sidebar() {
           </SidebarHeader>
         </>
       ) : (
-        <SidebarHeader className="gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3">
+        <SidebarHeader
+          className={cn(
+            "gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3",
+            isMobile &&
+              "border-b border-border/70 px-3 pt-[calc(var(--safe-area-inset-top)+0.85rem)] pb-3",
+          )}
+        >
           {wordmark}
+          {isMobile ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-border bg-background px-3 text-sm font-medium text-foreground/85 transition-colors duration-150 hover:border-ring hover:text-foreground"
+                onClick={openProjectBrowser}
+              >
+                + Add project
+              </button>
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-border bg-background px-3 text-sm font-medium text-foreground/80 transition-colors duration-150 hover:border-ring hover:text-foreground"
+                onClick={() => {
+                  void openSettingsFromSidebar();
+                }}
+              >
+                <SettingsIcon className="size-4" />
+                <span>Settings</span>
+              </button>
+            </div>
+          ) : null}
         </SidebarHeader>
       )}
 
       <SidebarContent className="gap-0">
-        <SidebarGroup className="px-2 py-2">
+        <SidebarGroup className={cn("px-2 py-2", isMobile && "px-3 py-3")}>
           <SidebarMenu>
             {projects.map((project) => {
               const projectThreads = threads
@@ -1274,7 +1306,7 @@ export default function Sidebar() {
               return (
                 <Collapsible
                   key={project.id}
-                  className="group/collapsible"
+                  className={cn("group/collapsible", isMobile && "mb-2.5")}
                   open={project.expanded}
                   onOpenChange={(open) => {
                     if (open === project.expanded) return;
@@ -1282,12 +1314,20 @@ export default function Sidebar() {
                   }}
                 >
                   <SidebarMenuItem>
-                    <div className="group/project-header relative">
+                    <div
+                      className={cn(
+                        "group/project-header relative",
+                        isMobile && "overflow-hidden rounded-[1.35rem] border border-border/70 bg-card/75 shadow-[0_1px_0_rgba(0,0,0,0.03)]",
+                      )}
+                    >
                       <CollapsibleTrigger
                         render={
                           <SidebarMenuButton
                             size="sm"
-                            className="gap-2 px-2 py-1.5 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground"
+                            className={cn(
+                              "gap-2 px-2 py-1.5 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground",
+                              isMobile && "min-h-13 gap-3 rounded-[1.35rem] px-3 py-3 hover:bg-accent/60",
+                            )}
                           />
                         }
                         onContextMenu={(event) => {
@@ -1299,14 +1339,30 @@ export default function Sidebar() {
                         }}
                       >
                         <ChevronRightIcon
-                          className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
-                            project.expanded ? "rotate-90" : ""
-                          }`}
+                          className={cn(
+                            "-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150",
+                            isMobile && "ml-0 size-4",
+                            project.expanded && "rotate-90",
+                          )}
                         />
                         <ProjectFavicon cwd={project.cwd} />
-                        <span className="flex-1 truncate text-xs font-medium text-foreground/90">
-                          {project.name}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span
+                            className={cn(
+                              "block truncate font-medium text-foreground/90",
+                              isMobile ? "text-sm" : "text-xs",
+                            )}
+                          >
+                            {project.name}
+                          </span>
+                          {isMobile ? (
+                            <span className="block truncate text-[11px] text-muted-foreground/65">
+                              {projectThreads.length} thread{projectThreads.length === 1 ? "" : "s"} •{" "}
+                              {projectShells.shells.length} shell
+                              {projectShells.shells.length === 1 ? "" : "s"}
+                            </span>
+                          ) : null}
+                        </div>
                       </CollapsibleTrigger>
                       <Tooltip>
                         <TooltipTrigger
@@ -1318,8 +1374,12 @@ export default function Sidebar() {
                                   aria-label={`Create new thread in ${project.name}`}
                                 />
                               }
-                              showOnHover
-                              className="top-1 right-1 size-5 rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
+                              showOnHover={!isMobile}
+                              className={cn(
+                                "top-1 right-1 size-5 rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground",
+                                isMobile &&
+                                  "top-3 right-3 size-8 rounded-xl border border-border/70 bg-background/85 text-foreground/75 shadow-sm",
+                              )}
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -1339,7 +1399,12 @@ export default function Sidebar() {
                     </div>
 
                     <CollapsibleContent>
-                      <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0 px-1.5 py-0">
+                      <SidebarMenuSub
+                        className={cn(
+                          "mx-1 my-0 w-full translate-x-0 gap-0 px-1.5 py-0",
+                          isMobile && "mx-0 px-2 pb-2.5",
+                        )}
+                      >
                         {visibleThreads.map((thread) => {
                           const isActive = routeThreadId === thread.id;
                           const threadStatus = threadStatusPill(
@@ -1354,11 +1419,13 @@ export default function Sidebar() {
                                 render={<div role="button" tabIndex={0} />}
                                 size="sm"
                                 isActive={isActive}
-                                className={`h-7 w-full translate-x-0 cursor-default justify-start px-2 text-left hover:bg-accent hover:text-foreground ${
+                                className={cn(
+                                  "w-full translate-x-0 cursor-default justify-start px-2 text-left hover:bg-accent hover:text-foreground",
+                                  isMobile ? "min-h-12 rounded-2xl px-3 py-2.5" : "h-7",
                                   isActive
                                     ? "bg-accent/85 text-foreground font-medium ring-1 ring-border/70 dark:bg-accent/55 dark:ring-border/50"
-                                    : "text-muted-foreground"
-                                }`}
+                                    : "text-muted-foreground",
+                                )}
                                 onClick={() => {
                                   void selectThreadFromSidebar(thread.id);
                                 }}
@@ -1397,14 +1464,20 @@ export default function Sidebar() {
                                   )}
                                   {threadStatus && (
                                     <span
-                                      className={`inline-flex items-center gap-1 text-[10px] ${threadStatus.colorClass}`}
+                                      className={cn(
+                                        "inline-flex items-center gap-1",
+                                        threadStatus.colorClass,
+                                        isMobile ? "text-[11px]" : "text-[10px]",
+                                      )}
                                     >
                                       <span
                                         className={`h-1.5 w-1.5 rounded-full ${threadStatus.dotClass} ${
                                           threadStatus.pulse ? "animate-pulse" : ""
                                         }`}
                                       />
-                                      <span className="hidden md:inline">{threadStatus.label}</span>
+                                      <span className={cn(isMobile ? "inline" : "hidden md:inline")}>
+                                        {threadStatus.label}
+                                      </span>
                                     </span>
                                   )}
                                   {renamingThreadId === thread.id ? (
@@ -1439,14 +1512,26 @@ export default function Sidebar() {
                                       onClick={(e) => e.stopPropagation()}
                                     />
                                   ) : (
-                                    <span className="min-w-0 flex-1 truncate text-xs">
+                                    <span
+                                      className={cn(
+                                        "min-w-0 flex-1 truncate",
+                                        isMobile ? "text-sm leading-5" : "text-xs",
+                                      )}
+                                    >
                                       {thread.title}
                                     </span>
                                   )}
                                 </div>
-                                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                                <div
+                                  className={cn(
+                                    "ml-auto flex shrink-0 items-center gap-1.5",
+                                    isMobile && "pl-2",
+                                  )}
+                                >
                                   <span
-                                    className={`text-[10px] ${
+                                    className={`${
+                                      isMobile ? "text-[11px]" : "text-[10px]"
+                                    } ${
                                       isActive ? "text-foreground/65" : "text-muted-foreground/40"
                                     }`}
                                   >
@@ -1463,7 +1548,10 @@ export default function Sidebar() {
                             <SidebarMenuSubButton
                               render={<button type="button" />}
                               size="sm"
-                              className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80"
+                              className={cn(
+                                "w-full translate-x-0 justify-start px-2 text-left text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80",
+                                isMobile ? "min-h-10 rounded-2xl px-3 text-[11px]" : "h-6 text-[10px]",
+                              )}
                               onClick={() => {
                                 expandThreadListForProject(project.id);
                               }}
@@ -1477,7 +1565,10 @@ export default function Sidebar() {
                             <SidebarMenuSubButton
                               render={<button type="button" />}
                               size="sm"
-                              className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80"
+                              className={cn(
+                                "w-full translate-x-0 justify-start px-2 text-left text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80",
+                                isMobile ? "min-h-10 rounded-2xl px-3 text-[11px]" : "h-6 text-[10px]",
+                              )}
                               onClick={() => {
                                 collapseThreadListForProject(project.id);
                               }}
@@ -1487,7 +1578,12 @@ export default function Sidebar() {
                           </SidebarMenuSubItem>
                         )}
 
-                        <div className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground/60 uppercase">
+                        <div
+                          className={cn(
+                            "px-2 pt-2 pb-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground/60 uppercase",
+                            isMobile && "px-3 pt-3 text-[11px]",
+                          )}
+                        >
                           Shells
                         </div>
 
@@ -1503,11 +1599,13 @@ export default function Sidebar() {
                                 render={<div role="button" tabIndex={0} />}
                                 size="sm"
                                 isActive={isActive}
-                                className={`h-7 w-full translate-x-0 cursor-default justify-start px-2 text-left hover:bg-accent hover:text-foreground ${
+                                className={cn(
+                                  "w-full translate-x-0 cursor-default justify-start px-2 text-left hover:bg-accent hover:text-foreground",
+                                  isMobile ? "min-h-12 rounded-2xl px-3 py-2.5" : "h-7",
                                   isActive
                                     ? "bg-accent/85 text-foreground font-medium ring-1 ring-border/70 dark:bg-accent/55 dark:ring-border/50"
-                                    : "text-muted-foreground"
-                                }`}
+                                    : "text-muted-foreground",
+                                )}
                                 onClick={() => {
                                   void selectShellFromSidebar(project.id, shell.id);
                                 }}
@@ -1518,10 +1616,17 @@ export default function Sidebar() {
                                 }}
                               >
                                 <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-                                  <TerminalIcon className="size-3.5 shrink-0" />
+                                  <TerminalIcon className={cn("shrink-0", isMobile ? "size-4" : "size-3.5")} />
                                   <div className="min-w-0 flex-1">
-                                    <span className="block truncate text-xs">{shell.title}</span>
-                                    <span className="block truncate text-[10px] text-muted-foreground/70">
+                                    <span className={cn("block truncate", isMobile ? "text-sm" : "text-xs")}>
+                                      {shell.title}
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "block truncate text-muted-foreground/70",
+                                        isMobile ? "text-[11px]" : "text-[10px]",
+                                      )}
+                                    >
                                       {shell.cwd}
                                     </span>
                                   </div>
@@ -1538,7 +1643,9 @@ export default function Sidebar() {
                                     </span>
                                   )}
                                   <span
-                                    className={`text-[10px] ${
+                                    className={`${
+                                      isMobile ? "text-[11px]" : "text-[10px]"
+                                    } ${
                                       isActive ? "text-foreground/65" : "text-muted-foreground/40"
                                     }`}
                                   >
@@ -1554,7 +1661,10 @@ export default function Sidebar() {
                           <SidebarMenuSubButton
                             render={<button type="button" />}
                             size="sm"
-                            className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                            className={cn(
+                              "w-full translate-x-0 justify-start px-2 text-left text-muted-foreground/70 hover:bg-accent hover:text-foreground",
+                              isMobile ? "min-h-10 rounded-2xl px-3 text-[11px]" : "h-6 text-[10px]",
+                            )}
                             onClick={() => {
                               void createShellFromSidebar(project.id);
                             }}
@@ -1576,7 +1686,12 @@ export default function Sidebar() {
           </SidebarMenu>
 
           {projects.length === 0 && !addingProject && (
-            <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
+            <div
+              className={cn(
+                "px-2 pt-4 text-center text-xs text-muted-foreground/60",
+                isMobile && "rounded-[1.4rem] border border-dashed border-border/70 bg-card/55 px-4 py-6 text-sm",
+              )}
+            >
               No projects yet.
               <br />
               Add one to get started.
@@ -1586,35 +1701,55 @@ export default function Sidebar() {
       </SidebarContent>
 
       <SidebarSeparator />
-      <SidebarFooter className="gap-2 p-3">
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
-          onClick={openProjectBrowser}
-        >
-          + Add project
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-border py-2 text-xs text-muted-foreground/80 transition-colors duration-150 hover:border-ring hover:text-foreground"
-          onClick={() => {
-            void openSettingsFromSidebar();
-          }}
-        >
-          <SettingsIcon className="size-3.5" />
-          <span>Settings</span>
-        </button>
+      <SidebarFooter
+        className={cn(
+          "gap-2 p-3",
+          isMobile &&
+            "border-t border-border/70 bg-background/96 px-3 pt-3 pb-[calc(var(--safe-area-inset-bottom)+0.85rem)] backdrop-blur-sm",
+        )}
+      >
+        {!isMobile ? (
+          <>
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
+              onClick={openProjectBrowser}
+            >
+              + Add project
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-2 rounded-md border border-border py-2 text-xs text-muted-foreground/80 transition-colors duration-150 hover:border-ring hover:text-foreground"
+              onClick={() => {
+                void openSettingsFromSidebar();
+              }}
+            >
+              <SettingsIcon className="size-3.5" />
+              <span>Settings</span>
+            </button>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-border/70 bg-card/80 px-3 py-2 text-[11px] text-muted-foreground/65">
+            Swipe from the left edge in chat or shell to reopen this navigator.
+          </div>
+        )}
       </SidebarFooter>
 
       <Dialog open={addingProject} onOpenChange={handleProjectBrowserOpenChange}>
-        <DialogPopup className="max-w-2xl">
+        <DialogPopup
+          className={cn(
+            "max-w-2xl",
+            isMobile &&
+              "app-mobile-viewport h-[calc(var(--app-mobile-viewport-height)-1rem)] max-w-none rounded-[1.75rem] p-0",
+          )}
+        >
           <DialogHeader>
             <DialogTitle>Add project</DialogTitle>
             <DialogDescription>
               Browse folders under the server cwd and pick one as the project root.
             </DialogDescription>
           </DialogHeader>
-          <DialogPanel className="space-y-4">
+          <DialogPanel className={cn("space-y-4", isMobile && "flex min-h-0 flex-1 flex-col p-4")}>
             <div className="rounded-xl border border-border bg-muted/30">
               <div className="border-b border-border px-4 py-3">
                 <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
@@ -1650,7 +1785,7 @@ export default function Sidebar() {
                 </div>
               </div>
 
-              <ScrollArea className="h-72">
+              <ScrollArea className={cn(isMobile ? "h-[min(56dvh,30rem)]" : "h-72")}>
                 {!projectBrowserRootPath ? (
                   <div className="px-4 py-6 text-sm text-muted-foreground">
                     Waiting for the server cwd.
@@ -1674,7 +1809,10 @@ export default function Sidebar() {
                         <button
                           key={entry.path}
                           type="button"
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                          className={cn(
+                            "flex w-full items-center gap-3 text-left text-sm transition-colors hover:bg-accent",
+                            isMobile ? "min-h-12 rounded-2xl px-3 py-3" : "rounded-lg px-3 py-2",
+                          )}
                           onClick={() => setProjectBrowserCurrentPath(entry.path)}
                         >
                           <FolderIcon className="size-4 shrink-0 text-muted-foreground/80" />
@@ -1686,7 +1824,10 @@ export default function Sidebar() {
                       ) : (
                         <div
                           key={entry.path}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground/75"
+                          className={cn(
+                            "flex w-full items-center gap-3 text-left text-sm text-muted-foreground/75",
+                            isMobile ? "min-h-12 rounded-2xl px-3 py-3" : "rounded-lg px-3 py-2",
+                          )}
                         >
                           <FileIcon className="size-4 shrink-0 text-muted-foreground/65" />
                           <span className="min-w-0 flex-1 truncate">{entry.name}</span>

@@ -21,6 +21,7 @@ import {
   gitBranchesQueryOptions,
   gitCommitMutationOptions,
   gitInitMutationOptions,
+  gitPullMutationOptions,
   gitPushMutationOptions,
   gitStageFilesMutationOptions,
   gitStatusQueryOptions,
@@ -289,8 +290,10 @@ function SourceControlPanel({
   commitMessage,
   onCommitMessageChange,
   commitPending,
+  pullPending,
   pushPending,
   onCommit,
+  onPull,
   onPush,
   stagePending,
   unstagePending,
@@ -317,8 +320,10 @@ function SourceControlPanel({
   commitMessage: string;
   onCommitMessageChange: (value: string) => void;
   commitPending: boolean;
+  pullPending: boolean;
   pushPending: boolean;
   onCommit: () => void;
+  onPull: () => void;
   onPush: () => void;
   stagePending: boolean;
   unstagePending: boolean;
@@ -373,6 +378,14 @@ function SourceControlPanel({
     commitPending ||
     stagePending ||
     unstagePending;
+  const pullDisabled =
+    !gitStatus?.branch ||
+    !gitStatus.hasUpstream ||
+    pullPending ||
+    pushPending ||
+    commitPending ||
+    stagePending ||
+    unstagePending;
   const pushDisabled =
     !gitStatus?.branch || pushPending || commitPending || stagePending || unstagePending;
   const remoteUrl = gitStatus?.remoteUrl?.trim() ? gitStatus.remoteUrl : "No origin remote configured";
@@ -389,7 +402,7 @@ function SourceControlPanel({
           Source Control
         </p>
         <p className="text-sm text-muted-foreground">
-          Stage files, commit changes, push the current branch, and inspect diffs inline.
+          Stage files, commit changes, fetch and pull the current branch, and inspect diffs inline.
         </p>
       </div>
 
@@ -471,10 +484,13 @@ function SourceControlPanel({
                   }
                 }}
               />
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                 <Button disabled={commitDisabled} onClick={onCommit}>
                   <CheckIcon className="size-4" />
                   {commitPending ? "Committing..." : "Commit"}
+                </Button>
+                <Button variant="outline" disabled={pullDisabled} onClick={onPull}>
+                  {pullPending ? "Fetching & pulling..." : "Fetch & pull"}
                 </Button>
                 <Button variant="outline" disabled={pushDisabled} onClick={onPush}>
                   {pushPending
@@ -653,6 +669,7 @@ export default function GitActionsControl({
     gitUnstageFilesMutationOptions({ cwd: gitCwd, queryClient }),
   );
   const commitMutation = useMutation(gitCommitMutationOptions({ cwd: gitCwd, queryClient }));
+  const pullMutation = useMutation(gitPullMutationOptions({ cwd: gitCwd, queryClient }));
   const pushMutation = useMutation(gitPushMutationOptions({ cwd: gitCwd, queryClient }));
   const gitStatusQuery = useQuery({
     ...gitStatusQueryOptions(gitCwd),
@@ -763,6 +780,23 @@ export default function GitActionsControl({
       });
   };
 
+  const handlePull = () => {
+    void pullMutation
+      .mutateAsync()
+      .then((result) => {
+        toastManager.add({
+          type: result.status === "pulled" ? "success" : "info",
+          title: result.status === "pulled" ? "Fetched and pulled branch" : "Branch already up to date",
+          description: result.upstreamBranch
+            ? `${result.branch} ← ${result.upstreamBranch}`
+            : result.branch,
+        });
+      })
+      .catch((error) => {
+        handleMutationError("Could not fetch and pull branch", error);
+      });
+  };
+
   const trigger = (
     <Button
       size={triggerSize ?? "xs"}
@@ -797,8 +831,10 @@ export default function GitActionsControl({
       commitMessage={commitMessage}
       onCommitMessageChange={setCommitMessage}
       commitPending={commitMutation.isPending}
+      pullPending={pullMutation.isPending}
       pushPending={pushMutation.isPending}
       onCommit={handleCommit}
+      onPull={handlePull}
       onPush={handlePush}
       stagePending={stageFilesMutation.isPending}
       unstagePending={unstageFilesMutation.isPending}
