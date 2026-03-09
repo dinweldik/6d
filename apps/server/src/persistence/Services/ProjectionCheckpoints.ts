@@ -15,7 +15,7 @@ import {
   OrchestrationCheckpointStatus,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Option, ServiceMap, Schema } from "effect";
 import type { Effect } from "effect";
 
@@ -90,4 +90,4 @@ export interface ProjectionCheckpointRepositoryShape {
 export class ProjectionCheckpointRepository extends ServiceMap.Service<
   ProjectionCheckpointRepository,
   ProjectionCheckpointRepositoryShape
->()("fatma-app/persistence/Services/ProjectionCheckpoints/ProjectionCheckpointRepository") {}
+>()("fatma/persistence/Services/ProjectionCheckpoints/ProjectionCheckpointRepository") {}

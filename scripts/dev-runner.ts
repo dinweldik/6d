@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { NetService } from "@t3tools/shared/Net";
+import { NetService } from "@fatma/shared/Net";
 import { Config, Data, Effect, Hash, Layer, Logger, Option, Path, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
@@ -16,7 +16,7 @@ const MAX_PORT = 65535;
 const DEFAULT_EXPOSE_HOST = "0.0.0.0";
 
 export const DEFAULT_DEV_STATE_DIR = Effect.map(Effect.service(Path.Path), (path) =>
-  path.join(homedir(), ".t3", "dev"),
+  path.join(homedir(), ".fatma", "dev"),
 );
 
 const MODE_ARGS = {
@@ -24,14 +24,14 @@ const MODE_ARGS = {
     "run",
     "dev",
     "--ui=tui",
-    "--filter=@t3tools/contracts",
-    "--filter=@t3tools/web",
+    "--filter=@fatma/contracts",
+    "--filter=@fatma/web",
     "--filter=fatma-app",
     "--parallel",
   ],
   "dev:server": ["run", "dev", "--filter=fatma-app"],
-  "dev:web": ["run", "dev", "--filter=@t3tools/web"],
-  "dev:desktop": ["run", "dev", "--filter=@t3tools/desktop", "--filter=@t3tools/web", "--parallel"],
+  "dev:web": ["run", "dev", "--filter=@fatma/web"],
+  "dev:desktop": ["run", "dev", "--filter=@fatma/desktop", "--filter=@fatma/web", "--parallel"],
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
 type DevMode = keyof typeof MODE_ARGS;
@@ -71,8 +71,8 @@ const optionalUrlConfig = (name: string): Config.Config<URL | undefined> =>
   );
 
 const OffsetConfig = Config.all({
-  portOffset: optionalIntegerConfig("T3CODE_PORT_OFFSET"),
-  devInstance: optionalStringConfig("T3CODE_DEV_INSTANCE"),
+  portOffset: optionalIntegerConfig("FATMA_PORT_OFFSET"),
+  devInstance: optionalStringConfig("FATMA_DEV_INSTANCE"),
 });
 
 export function resolveOffset(config: {
@@ -81,11 +81,11 @@ export function resolveOffset(config: {
 }): { readonly offset: number; readonly source: string } {
   if (config.portOffset !== undefined) {
     if (config.portOffset < 0) {
-      throw new Error(`Invalid T3CODE_PORT_OFFSET: ${config.portOffset}`);
+      throw new Error(`Invalid FATMA_PORT_OFFSET: ${config.portOffset}`);
     }
     return {
       offset: config.portOffset,
-      source: `T3CODE_PORT_OFFSET=${config.portOffset}`,
+      source: `FATMA_PORT_OFFSET=${config.portOffset}`,
     };
   }
 
@@ -95,11 +95,11 @@ export function resolveOffset(config: {
   }
 
   if (/^\d+$/.test(seed)) {
-    return { offset: Number(seed), source: `numeric T3CODE_DEV_INSTANCE=${seed}` };
+    return { offset: Number(seed), source: `numeric FATMA_DEV_INSTANCE=${seed}` };
   }
 
   const offset = ((Hash.string(seed) >>> 0) % MAX_HASH_OFFSET) + 1;
-  return { offset, source: `hashed T3CODE_DEV_INSTANCE=${seed}` };
+  return { offset, source: `hashed FATMA_DEV_INSTANCE=${seed}` };
 }
 
 function resolveStateDir(stateDir: string | undefined): Effect.Effect<string, never, Path.Path> {
@@ -152,50 +152,50 @@ export function createDevRunnerEnv({
 
     const output: NodeJS.ProcessEnv = {
       ...baseEnv,
-      T3CODE_PORT: String(serverPort),
+      FATMA_PORT: String(serverPort),
       PORT: String(webPort),
       ELECTRON_RENDERER_PORT: String(webPort),
       VITE_WS_URL: `ws://localhost:${serverPort}`,
       VITE_DEV_SERVER_URL: devUrl?.toString() ?? `http://localhost:${webPort}`,
-      T3CODE_STATE_DIR: resolvedStateDir,
+      FATMA_STATE_DIR: resolvedStateDir,
     };
 
     if (host !== undefined) {
-      output.T3CODE_HOST = host;
+      output.FATMA_HOST = host;
     }
 
     if (authToken !== undefined) {
-      output.T3CODE_AUTH_TOKEN = authToken;
+      output.FATMA_AUTH_TOKEN = authToken;
     } else {
-      delete output.T3CODE_AUTH_TOKEN;
+      delete output.FATMA_AUTH_TOKEN;
     }
 
     if (noBrowser !== undefined) {
-      output.T3CODE_NO_BROWSER = noBrowser ? "1" : "0";
+      output.FATMA_NO_BROWSER = noBrowser ? "1" : "0";
     } else {
-      delete output.T3CODE_NO_BROWSER;
+      delete output.FATMA_NO_BROWSER;
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
-      output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
+      output.FATMA_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
     } else {
-      delete output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
+      delete output.FATMA_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
     }
 
     if (logWebSocketEvents !== undefined) {
-      output.T3CODE_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
+      output.FATMA_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
     } else {
-      delete output.T3CODE_LOG_WS_EVENTS;
+      delete output.FATMA_LOG_WS_EVENTS;
     }
 
     if (mode === "dev") {
-      output.T3CODE_MODE = "web";
-      delete output.T3CODE_DESKTOP_WS_URL;
+      output.FATMA_MODE = "web";
+      delete output.FATMA_DESKTOP_WS_URL;
     }
 
     if (mode === "dev:server" || mode === "dev:web") {
-      output.T3CODE_MODE = "web";
-      delete output.T3CODE_DESKTOP_WS_URL;
+      output.FATMA_MODE = "web";
+      delete output.FATMA_DESKTOP_WS_URL;
     }
 
     return output;
@@ -383,7 +383,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       Effect.mapError(
         (cause) =>
           new DevRunnerError({
-            message: "Failed to read T3CODE_PORT_OFFSET/T3CODE_DEV_INSTANCE configuration.",
+            message: "Failed to read FATMA_PORT_OFFSET/FATMA_DEV_INSTANCE configuration.",
             cause,
           }),
       ),
@@ -399,11 +399,11 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     });
 
     const envOverrides = {
-      noBrowser: readOptionalBooleanEnv("T3CODE_NO_BROWSER"),
+      noBrowser: readOptionalBooleanEnv("FATMA_NO_BROWSER"),
       autoBootstrapProjectFromCwd: readOptionalBooleanEnv(
-        "T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
+        "FATMA_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
       ),
-      logWebSocketEvents: readOptionalBooleanEnv("T3CODE_LOG_WS_EVENTS"),
+      logWebSocketEvents: readOptionalBooleanEnv("FATMA_LOG_WS_EVENTS"),
     };
 
     const { serverOffset, webOffset } = yield* resolveModePortOffsets({
@@ -440,7 +440,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
         : "";
 
     yield* Effect.logInfo(
-      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} stateDir=${String(env.T3CODE_STATE_DIR)}`,
+      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.FATMA_PORT)} webPort=${String(env.PORT)} stateDir=${String(env.FATMA_STATE_DIR)}`,
     );
 
     if (input.dryRun) {
@@ -514,37 +514,37 @@ const devRunnerCli = Command.make("dev-runner", {
     Argument.withDescription("Development mode to run."),
   ),
   stateDir: Flag.string("state-dir").pipe(
-    Flag.withDescription("State directory path (forwards to T3CODE_STATE_DIR)."),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_STATE_DIR")),
+    Flag.withDescription("State directory path (forwards to FATMA_STATE_DIR)."),
+    Flag.withFallbackConfig(optionalStringConfig("FATMA_STATE_DIR")),
   ),
   authToken: Flag.string("auth-token").pipe(
-    Flag.withDescription("Auth token (forwards to T3CODE_AUTH_TOKEN)."),
+    Flag.withDescription("Auth token (forwards to FATMA_AUTH_TOKEN)."),
     Flag.withAlias("token"),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_AUTH_TOKEN")),
+    Flag.withFallbackConfig(optionalStringConfig("FATMA_AUTH_TOKEN")),
   ),
   noBrowser: Flag.boolean("no-browser").pipe(
-    Flag.withDescription("Browser auto-open toggle (equivalent to T3CODE_NO_BROWSER)."),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_NO_BROWSER")),
+    Flag.withDescription("Browser auto-open toggle (equivalent to FATMA_NO_BROWSER)."),
+    Flag.withFallbackConfig(optionalBooleanConfig("FATMA_NO_BROWSER")),
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
     Flag.withDescription(
-      "Auto-bootstrap toggle (equivalent to T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
+      "Auto-bootstrap toggle (equivalent to FATMA_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
     ),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
+    Flag.withFallbackConfig(optionalBooleanConfig("FATMA_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
   ),
   logWebSocketEvents: Flag.boolean("log-websocket-events").pipe(
-    Flag.withDescription("WebSocket event logging toggle (equivalent to T3CODE_LOG_WS_EVENTS)."),
+    Flag.withDescription("WebSocket event logging toggle (equivalent to FATMA_LOG_WS_EVENTS)."),
     Flag.withAlias("log-ws-events"),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_LOG_WS_EVENTS")),
+    Flag.withFallbackConfig(optionalBooleanConfig("FATMA_LOG_WS_EVENTS")),
   ),
   host: Flag.string("host").pipe(
-    Flag.withDescription("Server host/interface override (forwards to T3CODE_HOST)."),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOST")),
+    Flag.withDescription("Server host/interface override (forwards to FATMA_HOST)."),
+    Flag.withFallbackConfig(optionalStringConfig("FATMA_HOST")),
   ),
   port: Flag.integer("port").pipe(
     Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
-    Flag.withDescription("Server port override (forwards to T3CODE_PORT)."),
-    Flag.withFallbackConfig(optionalPortConfig("T3CODE_PORT")),
+    Flag.withDescription("Server port override (forwards to FATMA_PORT)."),
+    Flag.withFallbackConfig(optionalPortConfig("FATMA_PORT")),
   ),
   devUrl: Flag.string("dev-url").pipe(
     Flag.withSchema(Schema.URLFromString),

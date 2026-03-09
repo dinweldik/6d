@@ -6,13 +6,13 @@ import type {
   ServerTelegramNotificationSettings,
   ServerUpdateTelegramNotificationsInput,
   ServerUpdateTelegramNotificationsResult,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Effect, FileSystem, Layer, Path, Ref, Schema, ServiceMap } from "effect";
 
 import { ServerConfig } from "./config";
 
 const TELEGRAM_NOTIFICATIONS_FILE = "telegram-notifications.json";
-const APP_NOTIFICATION_NAME = "6d";
+const APP_NOTIFICATION_NAME = "fatma";
 const MAX_BOT_TOKEN_LENGTH = 4096;
 const MAX_CHAT_ID_LENGTH = 256;
 
@@ -60,7 +60,7 @@ export interface TelegramNotificationsShape {
 export class TelegramNotifications extends ServiceMap.Service<
   TelegramNotifications,
   TelegramNotificationsShape
->()("fatma-app/telegramNotifications") {}
+>()("fatma/telegramNotifications") {}
 
 function trimStoredValue(value: string): string {
   return value.trim();

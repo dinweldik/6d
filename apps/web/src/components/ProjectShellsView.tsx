@@ -3,7 +3,7 @@ import {
   DEFAULT_TERMINAL_ID,
   type ProjectId,
   type ResolvedKeybindingsConfig,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { EllipsisIcon, PlusIcon, SquareTerminalIcon, TerminalIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

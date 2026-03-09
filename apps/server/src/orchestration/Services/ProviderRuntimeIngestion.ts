@@ -31,4 +31,4 @@ export interface ProviderRuntimeIngestionShape {
 export class ProviderRuntimeIngestionService extends ServiceMap.Service<
   ProviderRuntimeIngestionService,
   ProviderRuntimeIngestionShape
->()("fatma-app/orchestration/Services/ProviderRuntimeIngestion/ProviderRuntimeIngestionService") {}
+>()("fatma/orchestration/Services/ProviderRuntimeIngestion/ProviderRuntimeIngestionService") {}

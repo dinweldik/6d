@@ -16,8 +16,8 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const APP_DISPLAY_NAME = "6d";
-const APP_BUNDLE_ID = "com.t3tools.t3code";
+const APP_DISPLAY_NAME = "fatma";
+const APP_BUNDLE_ID = "com.dinweldik.fatma";
 const LAUNCHER_VERSION = 1;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

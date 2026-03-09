@@ -1,20 +1,20 @@
 # Remote Access Setup
 
-Use this when you want to open 6d from another device (phone, tablet, another laptop).
+Use this when you want to open fatma from another device (phone, tablet, another laptop).
 
 ## CLI ↔ Env option map
 
-The 6d CLI accepts the following configuration options, available either as CLI flags or environment variables:
+The fatma CLI accepts the following configuration options, available either as CLI flags or environment variables:
 
 | CLI flag                | Env var               | Notes                              |
 | ----------------------- | --------------------- | ---------------------------------- |
-| `--mode <web\|desktop>` | `T3CODE_MODE`         | Runtime mode.                      |
-| `--port <number>`       | `T3CODE_PORT`         | HTTP/WebSocket port.               |
-| `--host <address>`      | `T3CODE_HOST`         | Bind interface/address.            |
-| `--state-dir <path>`    | `T3CODE_STATE_DIR`    | State directory.                   |
+| `--mode <web\|desktop>` | `FATMA_MODE`         | Runtime mode.                      |
+| `--port <number>`       | `FATMA_PORT`         | HTTP/WebSocket port.               |
+| `--host <address>`      | `FATMA_HOST`         | Bind interface/address.            |
+| `--state-dir <path>`    | `FATMA_STATE_DIR`    | State directory.                   |
 | `--dev-url <url>`       | `VITE_DEV_SERVER_URL` | Dev web URL redirect/proxy target. |
-| `--no-browser`          | `T3CODE_NO_BROWSER`   | Disable auto-open browser.         |
-| `--auth-token <token>`  | `T3CODE_AUTH_TOKEN`   | WebSocket auth token.              |
+| `--no-browser`          | `FATMA_NO_BROWSER`   | Disable auto-open browser.         |
+| `--auth-token <token>`  | `FATMA_AUTH_TOKEN`   | WebSocket auth token.              |
 
 > TIP: Use the `--help` flag to see all available options and their descriptions.
 

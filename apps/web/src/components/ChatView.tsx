@@ -17,14 +17,14 @@ import {
   OrchestrationThreadActivity,
   RuntimeMode,
   ProviderInteractionMode,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
   getReasoningEffortOptions,
   normalizeModelSlug,
   resolveModelSlugForProvider,
-} from "@t3tools/shared/model";
+} from "@fatma/shared/model";
 import {
   memo,
   useCallback,
@@ -234,7 +234,7 @@ const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
 const EMPTY_PROVIDER_STATUSES: ServerProviderStatus[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
-const WORKTREE_BRANCH_PREFIX = "t3code";
+const WORKTREE_BRANCH_PREFIX = "fatma";
 
 function workToneClass(tone: "thinking" | "tool" | "info" | "error"): string {
   if (tone === "error") return "text-rose-300/50 dark:text-rose-300/50";

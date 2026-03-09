@@ -18,8 +18,8 @@ import {
   type ProviderTurnStartResult,
   RuntimeMode,
   ProviderInteractionMode,
-} from "@t3tools/contracts";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+} from "@fatma/contracts";
+import { normalizeModelSlug } from "@fatma/shared/model";
 import { Effect, ServiceMap } from "effect";
 
 type PendingRequestKey = string;
@@ -396,8 +396,8 @@ export function normalizeCodexModelSlug(
 export function buildCodexInitializeParams() {
   return {
     clientInfo: {
-      name: "t3code_desktop",
-      title: "6d Desktop",
+      name: "fatma_desktop",
+      title: "fatma",
       version: "0.1.0",
     },
     capabilities: {

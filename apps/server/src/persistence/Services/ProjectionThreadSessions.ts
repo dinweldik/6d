@@ -12,7 +12,7 @@ import {
   OrchestrationSessionStatus,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -71,4 +71,4 @@ export interface ProjectionThreadSessionRepositoryShape {
 export class ProjectionThreadSessionRepository extends ServiceMap.Service<
   ProjectionThreadSessionRepository,
   ProjectionThreadSessionRepositoryShape
->()("fatma-app/persistence/Services/ProjectionThreadSessions/ProjectionThreadSessionRepository") {}
+>()("fatma/persistence/Services/ProjectionThreadSessions/ProjectionThreadSessionRepository") {}

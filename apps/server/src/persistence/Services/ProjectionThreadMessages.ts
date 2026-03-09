@@ -13,7 +13,7 @@ import {
   ThreadId,
   TurnId,
   IsoDateTime,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -78,4 +78,4 @@ export interface ProjectionThreadMessageRepositoryShape {
 export class ProjectionThreadMessageRepository extends ServiceMap.Service<
   ProjectionThreadMessageRepository,
   ProjectionThreadMessageRepositoryShape
->()("fatma-app/persistence/Services/ProjectionThreadMessages/ProjectionThreadMessageRepository") {}
+>()("fatma/persistence/Services/ProjectionThreadMessages/ProjectionThreadMessageRepository") {}

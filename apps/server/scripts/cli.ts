@@ -342,7 +342,7 @@ const publishCmd = Command.make(
 // ---------------------------------------------------------------------------
 
 const cli = Command.make("cli").pipe(
-  Command.withDescription("6d server build & publish CLI."),
+  Command.withDescription("fatma server build & publish CLI."),
   Command.withSubcommands([buildCmd, publishCmd]),
 );
 

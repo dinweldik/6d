@@ -5,15 +5,15 @@
     "VITE_WS_URL",
     "VITE_DEV_SERVER_URL",
     "ELECTRON_RENDERER_PORT",
-    "T3CODE_LOG_WS_EVENTS",
-    "T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
-    "T3CODE_MODE",
-    "T3CODE_HOST",
-    "T3CODE_PORT",
-    "T3CODE_NO_BROWSER",
-    "T3CODE_STATE_DIR",
-    "T3CODE_AUTH_TOKEN",
-    "T3CODE_DESKTOP_WS_URL"
+    "FATMA_LOG_WS_EVENTS",
+    "FATMA_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
+    "FATMA_MODE",
+    "FATMA_HOST",
+    "FATMA_PORT",
+    "FATMA_NO_BROWSER",
+    "FATMA_STATE_DIR",
+    "FATMA_AUTH_TOKEN",
+    "FATMA_DESKTOP_WS_URL"
   ],
   "tasks": {
     "build": {
@@ -21,7 +21,7 @@
       "outputs": ["dist/**", "dist-electron/**"]
     },
     "dev": {
-      "dependsOn": ["@t3tools/contracts#build"],
+      "dependsOn": ["@fatma/contracts#build"],
       "cache": false,
       "persistent": true
     },

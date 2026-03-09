@@ -27,7 +27,7 @@ import type {
   GitStatusInput,
   GitStatusResult,
   GitUnstageFilesInput,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 
 import type { GitCommandError } from "../Errors.ts";
 
@@ -192,5 +192,5 @@ export interface GitCoreShape {
  * GitCore - Service tag for low-level Git repository operations.
  */
 export class GitCore extends ServiceMap.Service<GitCore, GitCoreShape>()(
-  "fatma-app/git/Services/GitCore",
+  "fatma/git/Services/GitCore",
 ) {}

@@ -6,7 +6,7 @@
  *
  * @module ProviderHealth
  */
-import type { ServerProviderStatus } from "@t3tools/contracts";
+import type { ServerProviderStatus } from "@fatma/contracts";
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -18,5 +18,5 @@ export interface ProviderHealthShape {
 }
 
 export class ProviderHealth extends ServiceMap.Service<ProviderHealth, ProviderHealthShape>()(
-  "fatma-app/provider/Services/ProviderHealth",
+  "fatma/provider/Services/ProviderHealth",
 ) {}

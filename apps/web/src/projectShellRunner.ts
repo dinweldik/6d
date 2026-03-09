@@ -1,4 +1,4 @@
-import { type ProjectId, type ProjectScript } from "@t3tools/contracts";
+import { type ProjectId, type ProjectScript } from "@fatma/contracts";
 
 import { readNativeApi } from "./nativeApi";
 import { type Project } from "./types";

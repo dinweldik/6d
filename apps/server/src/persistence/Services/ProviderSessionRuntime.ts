@@ -10,7 +10,7 @@ import {
   ProviderSessionRuntimeStatus,
   RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -78,4 +78,4 @@ export interface ProviderSessionRuntimeRepositoryShape {
 export class ProviderSessionRuntimeRepository extends ServiceMap.Service<
   ProviderSessionRuntimeRepository,
   ProviderSessionRuntimeRepositoryShape
->()("fatma-app/persistence/Services/ProviderSessionRuntime/ProviderSessionRuntimeRepository") {}
+>()("fatma/persistence/Services/ProviderSessionRuntime/ProviderSessionRuntimeRepository") {}

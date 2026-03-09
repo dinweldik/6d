@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/shared",
+  "name": "@fatma/shared",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -31,7 +31,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@t3tools/contracts": "workspace:*",
+    "@fatma/contracts": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

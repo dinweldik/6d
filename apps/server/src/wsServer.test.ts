@@ -28,7 +28,7 @@ import {
   type KeybindingsConfig,
   type ResolvedKeybindingsConfig,
   type WsPush,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { compileResolvedKeybindingRule, DEFAULT_KEYBINDINGS } from "./keybindings";
 import type {
   TerminalClearInput,
@@ -38,7 +38,7 @@ import type {
   TerminalResizeInput,
   TerminalSessionSnapshot,
   TerminalWriteInput,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { TerminalManager, type TerminalManagerShape } from "./terminal/Services/Manager";
 import { makeSqlitePersistenceLive, SqlitePersistenceMemory } from "./persistence/Layers/Sqlite";
 import { SqlClient, SqlError } from "effect/unstable/sql";
@@ -414,7 +414,7 @@ describe("WebSocket Server", () => {
       throw new Error("Test server is already running");
     }
 
-    const stateDir = options.stateDir ?? makeTempDir("t3code-ws-state-");
+    const stateDir = options.stateDir ?? makeTempDir("fatma-ws-state-");
     const scope = await Effect.runPromise(Scope.make("sequential"));
     const persistenceLayer = options.persistenceLayer ?? SqlitePersistenceMemory;
     const providerLayer = options.providerLayer ?? makeServerProviderLayer();
@@ -519,7 +519,7 @@ describe("WebSocket Server", () => {
   });
 
   it("serves persisted attachments from stateDir", async () => {
-    const stateDir = makeTempDir("t3code-state-attachments-");
+    const stateDir = makeTempDir("fatma-state-attachments-");
     const attachmentPath = path.join(stateDir, "attachments", "thread-a", "message-a", "0.png");
     fs.mkdirSync(path.dirname(attachmentPath), { recursive: true });
     fs.writeFileSync(attachmentPath, Buffer.from("hello-attachment"));
@@ -537,7 +537,7 @@ describe("WebSocket Server", () => {
   });
 
   it("serves persisted attachments for URL-encoded paths", async () => {
-    const stateDir = makeTempDir("t3code-state-attachments-encoded-");
+    const stateDir = makeTempDir("fatma-state-attachments-encoded-");
     const attachmentPath = path.join(
       stateDir,
       "attachments",
@@ -603,8 +603,8 @@ describe("WebSocket Server", () => {
   });
 
   it("serves static index for root path", async () => {
-    const stateDir = makeTempDir("t3code-state-static-root-");
-    const staticDir = makeTempDir("t3code-static-root-");
+    const stateDir = makeTempDir("fatma-state-static-root-");
+    const staticDir = makeTempDir("fatma-static-root-");
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>static-root</h1>", "utf8");
 
     server = await createTestServer({ cwd: "/test/project", stateDir, staticDir });
@@ -619,8 +619,8 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects static path traversal attempts", async () => {
-    const stateDir = makeTempDir("t3code-state-static-traversal-");
-    const staticDir = makeTempDir("t3code-static-traversal-");
+    const stateDir = makeTempDir("fatma-state-static-traversal-");
+    const staticDir = makeTempDir("fatma-static-traversal-");
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>safe</h1>", "utf8");
 
     server = await createTestServer({ cwd: "/test/project", stateDir, staticDir });
@@ -634,8 +634,8 @@ describe("WebSocket Server", () => {
   });
 
   it("serves hashed static assets with immutable cache headers", async () => {
-    const stateDir = makeTempDir("t3code-state-static-assets-");
-    const staticDir = makeTempDir("t3code-static-assets-");
+    const stateDir = makeTempDir("fatma-state-static-assets-");
+    const staticDir = makeTempDir("fatma-static-assets-");
     const assetsDir = path.join(staticDir, "assets");
     fs.mkdirSync(assetsDir, { recursive: true });
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>static-root</h1>", "utf8");
@@ -652,8 +652,8 @@ describe("WebSocket Server", () => {
   });
 
   it("serves the service worker with revalidation headers", async () => {
-    const stateDir = makeTempDir("t3code-state-static-sw-");
-    const staticDir = makeTempDir("t3code-static-sw-");
+    const stateDir = makeTempDir("fatma-state-static-sw-");
+    const staticDir = makeTempDir("fatma-static-sw-");
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>static-root</h1>", "utf8");
     fs.writeFileSync(path.join(staticDir, "sw.js"), "self.addEventListener('fetch', () => {});", "utf8");
 
@@ -669,10 +669,10 @@ describe("WebSocket Server", () => {
   });
 
   it("serves the web manifest with the manifest content type", async () => {
-    const stateDir = makeTempDir("t3code-state-static-manifest-");
-    const staticDir = makeTempDir("t3code-static-manifest-");
+    const stateDir = makeTempDir("fatma-state-static-manifest-");
+    const staticDir = makeTempDir("fatma-static-manifest-");
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>static-root</h1>", "utf8");
-    fs.writeFileSync(path.join(staticDir, "manifest.webmanifest"), '{"name":"6d"}', "utf8");
+    fs.writeFileSync(path.join(staticDir, "manifest.webmanifest"), '{"name":"fatma"}', "utf8");
 
     server = await createTestServer({ cwd: "/test/project", stateDir, staticDir });
     const addr = server.address();
@@ -755,7 +755,7 @@ describe("WebSocket Server", () => {
   });
 
   it("includes bootstrap ids in welcome when cwd project and thread already exist", async () => {
-    const stateDir = makeTempDir("t3code-state-bootstrap-existing-");
+    const stateDir = makeTempDir("fatma-state-bootstrap-existing-");
     const persistenceLayer = makeSqlitePersistenceLive(path.join(stateDir, "state.sqlite")).pipe(
       Layer.provide(NodeServices.layer),
     );
@@ -839,7 +839,7 @@ describe("WebSocket Server", () => {
   });
 
   it("responds to server.getConfig", async () => {
-    const stateDir = makeTempDir("t3code-state-get-config-");
+    const stateDir = makeTempDir("fatma-state-get-config-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -868,7 +868,7 @@ describe("WebSocket Server", () => {
   });
 
   it("bootstraps default keybindings file when missing", async () => {
-    const stateDir = makeTempDir("t3code-state-bootstrap-keybindings-");
+    const stateDir = makeTempDir("fatma-state-bootstrap-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     expect(fs.existsSync(keybindingsPath)).toBe(false);
 
@@ -900,7 +900,7 @@ describe("WebSocket Server", () => {
   });
 
   it("falls back to defaults and reports malformed keybindings config issues", async () => {
-    const stateDir = makeTempDir("t3code-state-malformed-keybindings-");
+    const stateDir = makeTempDir("fatma-state-malformed-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "{ not-json", "utf8");
 
@@ -933,7 +933,7 @@ describe("WebSocket Server", () => {
   });
 
   it("ignores invalid keybinding entries but keeps valid entries and reports issues", async () => {
-    const stateDir = makeTempDir("t3code-state-partial-invalid-keybindings-");
+    const stateDir = makeTempDir("fatma-state-partial-invalid-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(
       keybindingsPath,
@@ -987,7 +987,7 @@ describe("WebSocket Server", () => {
   });
 
   it("pushes server.configUpdated issues when keybindings file changes", async () => {
-    const stateDir = makeTempDir("t3code-state-keybindings-watch-");
+    const stateDir = makeTempDir("fatma-state-keybindings-watch-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1052,7 +1052,7 @@ describe("WebSocket Server", () => {
   });
 
   it("reads keybindings from the configured state directory", async () => {
-    const stateDir = makeTempDir("t3code-state-keybindings-");
+    const stateDir = makeTempDir("fatma-state-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(
       keybindingsPath,
@@ -1090,7 +1090,7 @@ describe("WebSocket Server", () => {
   });
 
   it("upserts keybinding rules and updates cached server config", async () => {
-    const stateDir = makeTempDir("t3code-state-upsert-keybinding-");
+    const stateDir = makeTempDir("fatma-state-upsert-keybinding-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(
       keybindingsPath,
@@ -1220,7 +1220,7 @@ describe("WebSocket Server", () => {
     connections.push(ws);
     await waitForMessage(ws);
 
-    const workspaceRoot = makeTempDir("t3code-ws-diff-project-");
+    const workspaceRoot = makeTempDir("fatma-ws-diff-project-");
     const createdAt = new Date().toISOString();
     const createProjectResponse = await sendRequest(ws, ORCHESTRATION_WS_METHODS.dispatchCommand, {
       type: "project.create",
@@ -1299,7 +1299,7 @@ describe("WebSocket Server", () => {
     connections.push(ws);
     await waitForMessage(ws);
 
-    const workspaceRoot = makeTempDir("t3code-ws-project-");
+    const workspaceRoot = makeTempDir("fatma-ws-project-");
     const createdAt = new Date().toISOString();
     const createProjectResponse = await sendRequest(ws, ORCHESTRATION_WS_METHODS.dispatchCommand, {
       type: "project.create",
@@ -1381,7 +1381,7 @@ describe("WebSocket Server", () => {
   });
 
   it("routes terminal RPC methods and broadcasts terminal events", async () => {
-    const cwd = makeTempDir("t3code-ws-terminal-cwd-");
+    const cwd = makeTempDir("fatma-ws-terminal-cwd-");
     const terminalManager = new MockTerminalManager();
     server = await createTestServer({
       cwd: "/test",
@@ -1554,7 +1554,7 @@ describe("WebSocket Server", () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(unhandledRejections).toHaveLength(0);
 
-      const workspace = makeTempDir("t3code-ws-handler-still-usable-");
+      const workspace = makeTempDir("fatma-ws-handler-still-usable-");
       fs.writeFileSync(path.join(workspace, "file.txt"), "ok\n", "utf8");
       const response = await sendRequest(ws, WS_METHODS.projectsSearchEntries, {
         cwd: workspace,
@@ -1604,7 +1604,7 @@ describe("WebSocket Server", () => {
   });
 
   it("supports projects.searchEntries", async () => {
-    const workspace = makeTempDir("t3code-ws-workspace-entries-");
+    const workspace = makeTempDir("fatma-ws-workspace-entries-");
     fs.mkdirSync(path.join(workspace, "src", "components"), { recursive: true });
     fs.writeFileSync(
       path.join(workspace, "src", "components", "Composer.tsx"),
@@ -1639,7 +1639,7 @@ describe("WebSocket Server", () => {
   });
 
   it("supports projects.browseDirectory within the workspace root", async () => {
-    const workspace = makeTempDir("t3code-ws-browse-directory-");
+    const workspace = makeTempDir("fatma-ws-browse-directory-");
     fs.mkdirSync(path.join(workspace, "apps"), { recursive: true });
     fs.mkdirSync(path.join(workspace, "packages"), { recursive: true });
     fs.writeFileSync(path.join(workspace, "README.md"), "# test", "utf8");
@@ -1671,7 +1671,7 @@ describe("WebSocket Server", () => {
   });
 
   it("supports projects.createDirectory within the workspace root", async () => {
-    const workspace = makeTempDir("t3code-ws-create-directory-");
+    const workspace = makeTempDir("fatma-ws-create-directory-");
 
     server = await createTestServer({ cwd: "/test" });
     const addr = server.address();
@@ -1695,8 +1695,8 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects projects.createDirectory paths outside the workspace root", async () => {
-    const workspace = makeTempDir("t3code-ws-create-directory-reject-");
-    const outsideParent = makeTempDir("t3code-ws-create-directory-outside-");
+    const workspace = makeTempDir("fatma-ws-create-directory-reject-");
+    const outsideParent = makeTempDir("fatma-ws-create-directory-outside-");
 
     server = await createTestServer({ cwd: "/test" });
     const addr = server.address();
@@ -1718,7 +1718,7 @@ describe("WebSocket Server", () => {
   });
 
   it("supports projects.writeFile within the workspace root", async () => {
-    const workspace = makeTempDir("t3code-ws-write-file-");
+    const workspace = makeTempDir("fatma-ws-write-file-");
 
     server = await createTestServer({ cwd: "/test" });
     const addr = server.address();
@@ -1744,7 +1744,7 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects projects.writeFile paths outside the workspace root", async () => {
-    const workspace = makeTempDir("t3code-ws-write-file-reject-");
+    const workspace = makeTempDir("fatma-ws-write-file-reject-");
 
     server = await createTestServer({ cwd: "/test" });
     const addr = server.address();

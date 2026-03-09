@@ -1,4 +1,4 @@
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@fatma/contracts";
 
 import { randomUuid } from "./lib/utils";
 

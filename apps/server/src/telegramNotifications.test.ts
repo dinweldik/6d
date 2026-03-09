@@ -1,5 +1,5 @@
-import type { OrchestrationEvent, OrchestrationThread, OrchestrationThreadActivity } from "@t3tools/contracts";
-import { CheckpointRef, EventId, MessageId, ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
+import type { OrchestrationEvent, OrchestrationThread, OrchestrationThreadActivity } from "@fatma/contracts";
+import { CheckpointRef, EventId, MessageId, ProjectId, ThreadId, TurnId } from "@fatma/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -101,7 +101,7 @@ describe("telegramNotifications", () => {
 
     expect(isTelegramNotifiableOrchestrationEvent(event)).toBe(true);
     expect(buildTelegramNotificationText(event, thread)).toBe(
-      "✅ 6d: Codex finished working\nFix login race is ready.\nTime worked: 1m 5s",
+      "✅ fatma: Codex finished working\nFix login race is ready.\nTime worked: 1m 5s",
     );
   });
 
@@ -125,7 +125,7 @@ describe("telegramNotifications", () => {
 
     expect(isTelegramNotifiableOrchestrationEvent(event)).toBe(true);
     expect(buildTelegramNotificationText(event, makeThread())).toBe(
-      "⏳ 6d: Waiting for user input\nFix login race needs your input.\nWhich environment should I use?",
+      "⏳ fatma: Waiting for user input\nFix login race needs your input.\nWhich environment should I use?",
     );
   });
 

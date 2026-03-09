@@ -31,4 +31,4 @@ export interface CheckpointReactorShape {
 export class CheckpointReactor extends ServiceMap.Service<
   CheckpointReactor,
   CheckpointReactorShape
->()("fatma-app/orchestration/Services/CheckpointReactor") {}
+>()("fatma/orchestration/Services/CheckpointReactor") {}

@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { NativeApi, DesktopBridge } from "@t3tools/contracts";
+import type { NativeApi, DesktopBridge } from "@fatma/contracts";
 
 declare global {
   const __APP_VERSION__: string;

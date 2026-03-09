@@ -5,7 +5,7 @@ import type {
   GitFileDiffScope,
   GitReadWorkingTreeFileDiffResult,
   GitStatusResult,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { CheckIcon, ChevronDownIcon, FileIcon, FolderIcon } from "lucide-react";
 import {
   type ComponentProps,

@@ -1,6 +1,6 @@
 # Architecture
 
-6d runs as a **Node.js WebSocket server** that wraps `codex app-server` (JSON-RPC over stdio) and serves a React web app.
+fatma runs as a **Node.js WebSocket server** that wraps `codex app-server` (JSON-RPC over stdio) and serves a React web app.
 
 ```
 ┌─────────────────────────────────┐

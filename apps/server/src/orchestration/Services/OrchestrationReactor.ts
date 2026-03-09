@@ -28,4 +28,4 @@ export interface OrchestrationReactorShape {
 export class OrchestrationReactor extends ServiceMap.Service<
   OrchestrationReactor,
   OrchestrationReactorShape
->()("fatma-app/orchestration/Services/OrchestrationReactor") {}
+>()("fatma/orchestration/Services/OrchestrationReactor") {}

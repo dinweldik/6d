@@ -1,6 +1,6 @@
 # PWA Usage
 
-6d can be installed as a standalone web app, but it works best when the browser, service worker, and WebSocket server all live on one stable HTTPS origin.
+fatma can be installed as a standalone web app, but it works best when the browser, service worker, and WebSocket server all live on one stable HTTPS origin.
 
 ## Recommended setup
 
@@ -17,10 +17,10 @@ bun run dev:single
 Then expose that single port through Tailscale Serve:
 
 ```bash
-tailscale serve https://sixd.example 3773
+tailscale serve https://fatma.example 3773
 ```
 
-Open `https://sixd.example` from the phone, tablet, or desktop browser you want to install from.
+Open `https://fatma.example` from the phone, tablet, or desktop browser you want to install from.
 
 Why this setup is best:
 
@@ -42,11 +42,11 @@ On iPhone or iPad Safari:
 - Tap `Share`.
 - Choose `Add to Home Screen`.
 
-You can also open `Settings -> Web App` inside 6d to see install guidance for the current device.
+You can also open `Settings -> Web App` inside fatma to see install guidance for the current device.
 
 ## Updating the installed app
 
-6d checks for app-shell updates automatically while it is open. When a newer installed shell is ready:
+fatma checks for app-shell updates automatically while it is open. When a newer installed shell is ready:
 
 - a toast appears with `Reload`
 - `Settings -> Web App` shows `Reload to update`

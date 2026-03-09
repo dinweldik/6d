@@ -11,10 +11,10 @@ const webPackageJson = JSON.parse(
 const appVersion = webPackageJson.version;
 
 const port = Number(process.env.PORT ?? 5733);
-const host = process.env.T3CODE_HOST?.trim() || "localhost";
-const isDesktopMode = process.env.T3CODE_MODE === "desktop";
+const host = process.env.FATMA_HOST?.trim() || "localhost";
+const isDesktopMode = process.env.FATMA_MODE === "desktop";
 const extraAllowedHosts =
-  process.env.T3CODE_VITE_ALLOWED_HOSTS
+  process.env.FATMA_VITE_ALLOWED_HOSTS
     ?.split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0) ?? [];

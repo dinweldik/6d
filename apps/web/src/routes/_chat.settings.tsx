@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { type ProviderKind, type ServerConfig as ServerRuntimeConfig } from "@t3tools/contracts";
-import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
+import { type ProviderKind, type ServerConfig as ServerRuntimeConfig } from "@fatma/contracts";
+import { getModelOptions, normalizeModelSlug } from "@fatma/shared/model";
 import { ZapIcon } from "lucide-react";
 
 import {
@@ -230,7 +230,7 @@ function SettingsRouteView() {
       setTelegramFormStatus({
         tone: nextSettings.enabled ? "success" : "info",
         message: nextSettings.enabled
-          ? "Telegram notifications saved. 6d will send Telegram messages when Codex finishes or needs your input."
+          ? "Telegram notifications saved. fatma will send Telegram messages when Codex finishes or needs your input."
           : "Telegram settings saved. Add both a bot token and a user/chat ID to enable notifications.",
       });
     },
@@ -286,7 +286,7 @@ function SettingsRouteView() {
           return;
         }
         if (choice.outcome === "accepted") {
-          setPwaInstallStatus("Install prompt accepted. Finish adding 6d from your browser UI.");
+          setPwaInstallStatus("Install prompt accepted. Finish adding fatma from your browser UI.");
           return;
         }
         setPwaInstallStatus("Install prompt dismissed.");
@@ -334,7 +334,7 @@ function SettingsRouteView() {
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Appearance</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Choose how 6d handles light and dark mode.
+                  Choose how fatma handles light and dark mode.
                 </p>
               </div>
 
@@ -435,7 +435,7 @@ function SettingsRouteView() {
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Web App</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Install 6d as a standalone app shell and keep the installed version current.
+                  Install fatma as a standalone app shell and keep the installed version current.
                 </p>
               </div>
 
@@ -802,7 +802,7 @@ function SettingsRouteView() {
                 <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
                   <p>
                     {telegramNotifications?.enabled
-                      ? "Telegram notifications are active. 6d will message you when Codex finishes or needs approval/input."
+                      ? "Telegram notifications are active. fatma will message you when Codex finishes or needs approval/input."
                       : "Telegram notifications are inactive until both a bot token and a user/chat ID are configured."}
                   </p>
                   {telegramFormStatus ? (
@@ -873,7 +873,7 @@ function SettingsRouteView() {
                 {serverConfigQuery.isSuccess && !telegramNotifications?.enabled ? (
                   <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
                     <p>
-                      6d sends Telegram messages from the server, so delivery does not depend on
+                      fatma sends Telegram messages from the server, so delivery does not depend on
                       the current browser tab staying active.
                     </p>
                   </div>

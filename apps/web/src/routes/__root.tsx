@@ -1,4 +1,4 @@
-import { ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@fatma/contracts";
 import {
   Outlet,
   createRootRouteWithContext,

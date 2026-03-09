@@ -5,7 +5,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@fatma/contracts";
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -176,7 +176,7 @@ describe("CheckpointDiffQueryLive", () => {
         {
           turnId: TurnId.makeUnsafe("turn-2"),
           checkpointTurnCount: 2,
-          checkpointRef: CheckpointRef.makeUnsafe("refs/t3/checkpoints/stale"),
+          checkpointRef: CheckpointRef.makeUnsafe("refs/fatma/checkpoints/stale"),
         },
       ],
     });

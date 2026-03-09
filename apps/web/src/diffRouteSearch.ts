@@ -1,4 +1,4 @@
-import { TurnId } from "@t3tools/contracts";
+import { TurnId } from "@fatma/contracts";
 
 export interface DiffRouteSearch {
   diff?: "1";

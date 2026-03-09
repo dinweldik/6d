@@ -1,11 +1,12 @@
-# 6d
+# fatma
 
-6d is a minimal web GUI for coding agents. Currently Codex-first, with Claude Code support coming soon.
+fatma is a minimal web GUI for coding agents. Currently Codex-first, with Claude Code support coming soon.
+fatma started as a fork of t3code.
 
 ## How to use
 
 > [!WARNING]
-> You need to have [Codex CLI](https://github.com/openai/codex) installed and authorized for 6d to work.
+> You need to have [Codex CLI](https://github.com/openai/codex) installed and authorized for fatma to work.
 
 ```bash
 npx fatma-app
@@ -52,10 +53,10 @@ For the best mobile and PWA experience, use one HTTPS origin for both the UI and
 Then publish that single local port through Tailscale Serve:
 
 ```bash
-tailscale serve https://sixd.example 3773
+tailscale serve https://fatma.example 3773
 ```
 
-Open `https://sixd.example` on your phone, then install it from the browser UI. This keeps the service worker, manifest, and WebSocket traffic on one stable origin, which is what you want for a standalone app.
+Open `https://fatma.example` on your phone, then install it from the browser UI. This keeps the service worker, manifest, and WebSocket traffic on one stable origin, which is what you want for a standalone app.
 
 If you are actively iterating on the frontend with `bun run dev`, keep using the split Vite + backend setup, but treat that as a development workflow rather than the installable mobile path. The client can still normalize `localhost` hosts and upgrade to `wss`, but the best install/update behavior comes from the single-origin setup above.
 

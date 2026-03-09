@@ -82,7 +82,7 @@ function resolveInstallInstructions(): string {
     return "Chrome/Edge: browser menu -> Install app or Add to Home screen.";
   }
   if (/mac/i.test(platform)) {
-    return "Chrome/Edge: open the site menu and choose Install 6d.";
+    return "Chrome/Edge: open the site menu and choose Install fatma.";
   }
   return "Use your browser's Install app / Add to Home Screen action.";
 }
@@ -130,9 +130,9 @@ function resolveSupportDetails(params: { isDevelopment: boolean; isSupported: bo
     return "This browser does not support the service worker APIs required for installation.";
   }
   if (isSupported) {
-    return "For the best mobile experience, serve 6d from one stable HTTPS origin and install that origin as the standalone app.";
+    return "For the best mobile experience, serve fatma from one stable HTTPS origin and install that origin as the standalone app.";
   }
-  return "Installability requires HTTPS or localhost. Open 6d through your Tailscale HTTPS URL instead of a raw LAN HTTP address.";
+  return "Installability requires HTTPS or localhost. Open fatma through your Tailscale HTTPS URL instead of a raw LAN HTTP address.";
 }
 
 export function PwaProvider(props: { readonly children: ReactNode }) {

@@ -1,4 +1,4 @@
-import { type ProjectId } from "@t3tools/contracts";
+import { type ProjectId } from "@fatma/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -11,7 +11,7 @@ import {
   type ProjectShellRecord,
 } from "./projectShells";
 
-const PROJECT_SHELL_STORAGE_KEY = "t3code:project-shells:v1";
+const PROJECT_SHELL_STORAGE_KEY = "fatma:project-shells:v1";
 
 function normalizeShellEnv(env: Record<string, string> | undefined): Record<string, string> {
   if (!env) {
