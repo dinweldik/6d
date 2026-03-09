@@ -11,6 +11,7 @@ import { readNativeApi } from "../nativeApi";
 import { preferredTerminalEditor, resolvePathLinkTarget } from "../terminal-links";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { isElectron } from "../env";
+import { useMobileViewport } from "../mobileViewport";
 import { useTheme } from "../hooks/useTheme";
 import { resolveDiffThemeName } from "../lib/diffRendering";
 import {
@@ -42,6 +43,7 @@ export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
+  const mobileViewport = useMobileViewport();
   const [diffRenderMode, setDiffRenderMode] = useState<DiffRenderMode>("stacked");
   const patchViewportRef = useRef<HTMLDivElement>(null);
   const turnStripRef = useRef<HTMLDivElement>(null);
@@ -81,7 +83,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   );
 
   const selectedTurnId = diffSearch.diffTurnId ?? null;
-  const selectedFilePath = selectedTurnId !== null ? (diffSearch.diffFilePath ?? null) : null;
+  const selectedFilePath = diffSearch.diffFilePath ?? null;
   const selectedTurn =
     selectedTurnId === null
       ? undefined
@@ -195,6 +197,25 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     },
     [activeCwd],
   );
+  const selectFile = useCallback(
+    (filePath: string | null) => {
+      if (!activeThread) return;
+      void navigate({
+        to: "/$threadId",
+        params: { threadId: activeThread.id },
+        search: (previous) => {
+          const rest = stripDiffSearchParams(previous);
+          return {
+            ...rest,
+            diff: "1",
+            ...(selectedTurn ? { diffTurnId: selectedTurn.turnId } : {}),
+            ...(filePath ? { diffFilePath: filePath } : {}),
+          };
+        },
+      });
+    },
+    [activeThread, navigate, selectedTurn],
+  );
 
   const selectTurn = (turnId: TurnId) => {
     if (!activeThread) return;
@@ -292,7 +313,8 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         <button
           type="button"
           className={cn(
-            "absolute left-0 top-1/2 z-20 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md border bg-background/90 text-muted-foreground transition-colors",
+            "absolute left-0 top-1/2 z-20 inline-flex -translate-y-1/2 items-center justify-center border bg-background/90 text-muted-foreground transition-colors",
+            mobileViewport.isMobile ? "size-8 rounded-xl" : "size-6 rounded-md",
             canScrollTurnStripLeft
               ? "border-border/70 hover:border-border hover:text-foreground"
               : "cursor-not-allowed border-border/40 text-muted-foreground/40",
@@ -306,7 +328,8 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         <button
           type="button"
           className={cn(
-            "absolute right-0 top-1/2 z-20 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md border bg-background/90 text-muted-foreground transition-colors",
+            "absolute right-0 top-1/2 z-20 inline-flex -translate-y-1/2 items-center justify-center border bg-background/90 text-muted-foreground transition-colors",
+            mobileViewport.isMobile ? "size-8 rounded-xl" : "size-6 rounded-md",
             canScrollTurnStripRight
               ? "border-border/70 hover:border-border hover:text-foreground"
               : "cursor-not-allowed border-border/40 text-muted-foreground/40",
@@ -319,7 +342,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         </button>
         <div
           ref={turnStripRef}
-          className="turn-chip-strip flex gap-1 overflow-x-auto px-8 py-0.5"
+          className={cn(
+            "turn-chip-strip flex overflow-x-auto px-8 py-0.5",
+            mobileViewport.isMobile ? "gap-2 py-1" : "gap-1",
+          )}
           onWheel={onTurnStripWheel}
         >
           <button
@@ -330,13 +356,16 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           >
             <div
               className={cn(
-                "rounded-md border px-2 py-1 text-left transition-colors",
+                "border text-left transition-colors",
+                mobileViewport.isMobile ? "rounded-xl px-3 py-2" : "rounded-md px-2 py-1",
                 selectedTurnId === null
                   ? "border-border bg-accent text-accent-foreground"
                   : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
               )}
             >
-              <div className="text-[10px] leading-tight font-medium">All turns</div>
+              <div className={cn("leading-tight font-medium", mobileViewport.isMobile ? "text-[11px]" : "text-[10px]")}>
+                All turns
+              </div>
             </div>
           </button>
           {orderedTurnDiffSummaries.map((summary) => (
@@ -350,20 +379,31 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             >
               <div
                 className={cn(
-                  "rounded-md border px-2 py-1 text-left transition-colors",
+                  "border text-left transition-colors",
+                  mobileViewport.isMobile ? "rounded-xl px-3 py-2" : "rounded-md px-2 py-1",
                   summary.turnId === selectedTurn?.turnId
                     ? "border-border bg-accent text-accent-foreground"
                     : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
                 )}
               >
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] leading-tight font-medium">
+                  <span
+                    className={cn(
+                      "leading-tight font-medium",
+                      mobileViewport.isMobile ? "text-[11px]" : "text-[10px]",
+                    )}
+                  >
                     Turn{" "}
                     {summary.checkpointTurnCount ??
                       inferredCheckpointTurnCountByTurnId[summary.turnId] ??
                       "?"}
                   </span>
-                  <span className="text-[9px] leading-tight opacity-70">
+                  <span
+                    className={cn(
+                      "leading-tight opacity-70",
+                      mobileViewport.isMobile ? "text-[10px]" : "text-[9px]",
+                    )}
+                  >
                     {formatTurnChipTimestamp(summary.completedAt)}
                   </span>
                 </div>
@@ -373,9 +413,9 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         </div>
       </div>
       <ToggleGroup
-        className="shrink-0 [-webkit-app-region:no-drag]"
+        className={cn("shrink-0 [-webkit-app-region:no-drag]", mobileViewport.isMobile && "self-end")}
         variant="outline"
-        size="xs"
+        size={mobileViewport.isMobile ? "lg" : "xs"}
         value={[diffRenderMode]}
         onValueChange={(value) => {
           const next = value[0];
@@ -396,6 +436,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const headerRowClassName = cn(
     "flex items-center justify-between gap-2 px-4",
     shouldUseDragRegion ? "drag-region h-[52px] border-b border-border" : "h-12",
+    mobileViewport.isMobile && "h-auto flex-col items-stretch gap-3 px-3 py-3",
   );
 
   return (
@@ -417,18 +458,77 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
 
       {!activeThread ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
+          <div className={cn(mobileViewport.isMobile && "max-w-xs text-sm")}>
           Select a thread to inspect turn diffs.
+          </div>
         </div>
       ) : !isGitRepo ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
+          <div className={cn(mobileViewport.isMobile && "max-w-xs text-sm")}>
           Turn diffs are unavailable because this project is not a git repository.
+          </div>
         </div>
       ) : orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
-          No completed turns yet.
+          <div className={cn(mobileViewport.isMobile && "max-w-xs text-sm")}>
+            No completed turns yet.
+          </div>
         </div>
       ) : (
         <>
+          {renderableFiles.length > 1 && (
+            <div className="border-b border-border/70 px-3 py-2">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground/70 uppercase">
+                  Files
+                </p>
+                {selectedFilePath ? (
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground"
+                    onClick={() => {
+                      selectFile(null);
+                    }}
+                  >
+                    Show all
+                  </button>
+                ) : null}
+              </div>
+              <div className="turn-chip-strip flex gap-2 overflow-x-auto pb-0.5">
+                {renderableFiles.map((fileDiff) => {
+                  const filePath = resolveFileDiffPath(fileDiff);
+                  const isSelected = selectedFilePath === filePath;
+                  return (
+                    <button
+                      key={`file-chip:${filePath}`}
+                      type="button"
+                      className={cn(
+                        "shrink-0 rounded-xl border px-3 py-2 text-left transition-colors",
+                        isSelected
+                          ? "border-border bg-accent text-accent-foreground"
+                          : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
+                      )}
+                      onClick={() => {
+                        selectFile(filePath);
+                      }}
+                      title={filePath}
+                    >
+                      <div
+                        className={cn(
+                          "truncate font-medium",
+                          mobileViewport.isMobile
+                            ? "max-w-[13rem] text-[11px]"
+                            : "max-w-[16rem] text-[10px]",
+                        )}
+                      >
+                        {filePath}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div
             ref={patchViewportRef}
             className="diff-panel-viewport min-h-0 min-w-0 flex-1 overflow-hidden"
@@ -450,7 +550,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
               </div>
             ) : renderablePatch.kind === "files" ? (
               <Virtualizer
-                className="diff-render-surface h-full min-h-0 overflow-auto px-2 pb-2"
+                className={cn(
+                  "diff-render-surface h-full min-h-0 overflow-auto",
+                  mobileViewport.isMobile ? "px-3 pb-3" : "px-2 pb-2",
+                )}
                 config={{
                   overscrollSize: 600,
                   intersectionObserverMargin: 1200,
@@ -458,13 +561,19 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
               >
                 {renderableFiles.map((fileDiff) => {
                   const filePath = resolveFileDiffPath(fileDiff);
+                  if (selectedFilePath && selectedFilePath !== filePath) {
+                    return null;
+                  }
                   const fileKey = buildFileDiffRenderKey(fileDiff);
                   const themedFileKey = `${fileKey}:${resolvedTheme}`;
                   return (
                     <div
                       key={themedFileKey}
                       data-diff-file-path={filePath}
-                      className="diff-render-file mb-2 rounded-md first:mt-2 last:mb-0"
+                      className={cn(
+                        "diff-render-file mb-2 first:mt-2 last:mb-0",
+                        mobileViewport.isMobile ? "rounded-xl" : "rounded-md",
+                      )}
                       onClickCapture={(event) => {
                         const nativeEvent = event.nativeEvent as MouseEvent;
                         const composedPath = nativeEvent.composedPath?.() ?? [];

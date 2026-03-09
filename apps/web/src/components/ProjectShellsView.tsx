@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useMobileEdgeSwipe } from "../hooks/useMobileEdgeSwipe";
 import { useMobileViewport } from "../mobileViewport";
 import {
@@ -46,6 +47,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { SidebarTrigger, useSidebar } from "./ui/sidebar";
+import { toastManager } from "./ui/toast";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const DESKTOP_TERMINAL_FONT_SIZE = 12;
@@ -54,14 +56,22 @@ const MIN_TERMINAL_FONT_SIZE = 12;
 const MAX_TERMINAL_FONT_SIZE = 18;
 
 const MOBILE_TERMINAL_ACCESSORY_ITEMS = [
-  { id: "esc", label: "Esc", data: "\u001b", title: "Send escape" },
-  { id: "tab", label: "Tab", data: "\t", title: "Send tab" },
-  { id: "ctrl-c", label: "^C", data: "\u0003", title: "Interrupt the current command" },
-  { id: "ctrl-d", label: "^D", data: "\u0004", title: "Send EOF" },
-  { id: "left", label: "←", data: "\u001b[D", title: "Move cursor left" },
-  { id: "down", label: "↓", data: "\u001b[B", title: "Move cursor down" },
-  { id: "up", label: "↑", data: "\u001b[A", title: "Move cursor up" },
-  { id: "right", label: "→", data: "\u001b[C", title: "Move cursor right" },
+  { id: "paste", label: "Paste", kind: "paste", title: "Paste clipboard contents" },
+  { id: "esc", label: "Esc", kind: "data", data: "\u001b", title: "Send escape" },
+  { id: "tab", label: "Tab", kind: "data", data: "\t", title: "Send tab" },
+  { id: "ctrl-c", label: "^C", kind: "data", data: "\u0003", title: "Interrupt the current command" },
+  { id: "ctrl-d", label: "^D", kind: "data", data: "\u0004", title: "Send EOF" },
+  { id: "ctrl-l", label: "^L", kind: "data", data: "\u000c", title: "Clear terminal output" },
+  { id: "slash", label: "/", kind: "data", data: "/", title: "Insert slash" },
+  { id: "pipe", label: "|", kind: "data", data: "|", title: "Insert pipe" },
+  { id: "dash", label: "-", kind: "data", data: "-", title: "Insert dash" },
+  { id: "tilde", label: "~", kind: "data", data: "~", title: "Insert tilde" },
+  { id: "home", label: "Home", kind: "data", data: "\u001b[H", title: "Move to line start" },
+  { id: "end", label: "End", kind: "data", data: "\u001b[F", title: "Move to line end" },
+  { id: "left", label: "←", kind: "data", data: "\u001b[D", title: "Move cursor left" },
+  { id: "down", label: "↓", kind: "data", data: "\u001b[B", title: "Move cursor down" },
+  { id: "up", label: "↑", kind: "data", data: "\u001b[A", title: "Move cursor up" },
+  { id: "right", label: "→", kind: "data", data: "\u001b[C", title: "Move cursor right" },
 ] as const;
 
 function clampTerminalFontSize(fontSize: number): number {
@@ -701,6 +711,66 @@ export default function ProjectShellsView({
     [requestShellFocus, shellRuntimeThreadId],
   );
 
+  const pasteIntoActiveShell = useCallback(async () => {
+    if (
+      typeof navigator === "undefined" ||
+      navigator.clipboard?.readText === undefined
+    ) {
+      toastManager.add({
+        type: "warning",
+        title: "Clipboard paste is unavailable",
+        description: "This browser does not expose clipboard read access here.",
+      });
+      return;
+    }
+
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) {
+        return;
+      }
+      await writeToActiveShell(text);
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Unable to paste clipboard",
+        description:
+          error instanceof Error ? error.message : "Clipboard access was blocked.",
+      });
+    }
+  }, [writeToActiveShell]);
+
+  const openAdjacentShell = useCallback(
+    async (direction: -1 | 1) => {
+      if (!activeShell || collection.shells.length <= 1) {
+        return;
+      }
+      const activeIndex = collection.shells.findIndex((shell) => shell.id === activeShell.id);
+      if (activeIndex < 0) {
+        return;
+      }
+      const nextIndex =
+        (activeIndex + direction + collection.shells.length) % collection.shells.length;
+      const nextShell = collection.shells[nextIndex];
+      if (!nextShell || nextShell.id === activeShell.id) {
+        return;
+      }
+      await openShellAndFocus(nextShell.id);
+    },
+    [activeShell, collection.shells, openShellAndFocus],
+  );
+  const shellSwipeHandlers = useHorizontalSwipe({
+    enabled: mobileViewport.isMobile && collection.shells.length > 1,
+    excludeEdgeStartPx: 28,
+    minSwipeDistancePx: 72,
+    onSwipeLeft: () => {
+      void openAdjacentShell(1);
+    },
+    onSwipeRight: () => {
+      void openAdjacentShell(-1);
+    },
+  });
+
   if (!activeShell) {
     return null;
   }
@@ -924,13 +994,19 @@ export default function ProjectShellsView({
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+      <main
+        className="flex min-h-0 flex-1 flex-col p-3 sm:p-4"
+        {...shellSwipeHandlers}
+      >
         <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-border/70 bg-card/40 px-3 py-2 sm:hidden">
           <div>
             <div className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
               Terminal
             </div>
-            <div className="text-sm text-muted-foreground">Phone-optimized shell controls</div>
+            <div className="text-sm text-muted-foreground">
+              Phone-optimized shell controls
+              {collection.shells.length > 1 ? " • swipe to switch shells" : ""}
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -970,21 +1046,36 @@ export default function ProjectShellsView({
           />
         </div>
 
-        <div className="turn-chip-strip mt-2 flex gap-2 overflow-x-auto pb-[calc(var(--safe-area-inset-bottom)+0.35rem)] sm:hidden">
+        <div className="mt-2 sm:hidden">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <div className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Accessory keys
+            </div>
+            <div className="text-[11px] text-muted-foreground/75">Terminal shortcuts for touch</div>
+          </div>
+          <div className="turn-chip-strip flex gap-2 overflow-x-auto pb-[calc(var(--safe-area-inset-bottom)+0.35rem)]">
           {MOBILE_TERMINAL_ACCESSORY_ITEMS.map((item) => (
             <Button
               key={item.id}
               size="sm"
               variant="outline"
-              className="min-w-11 shrink-0"
+              className={cn(
+                "shrink-0 rounded-2xl",
+                item.label.length > 2 ? "min-w-[3.35rem] px-3" : "min-w-11",
+              )}
               title={item.title}
               onClick={() => {
+                if (item.kind === "paste") {
+                  void pasteIntoActiveShell();
+                  return;
+                }
                 void writeToActiveShell(item.data);
               }}
             >
               {item.label}
             </Button>
           ))}
+          </div>
         </div>
       </main>
     </div>

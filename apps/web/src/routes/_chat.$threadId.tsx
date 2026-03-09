@@ -6,9 +6,11 @@ import ChatView from "../components/ChatView";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useMobileViewport } from "../mobileViewport";
 import { useStore } from "../store";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
+import { cn } from "../lib/utils";
 
 const DiffPanel = lazy(() => import("../components/DiffPanel"));
 const DIFF_INLINE_LAYOUT_MEDIA_QUERY = "(max-width: 1180px)";
@@ -21,6 +23,7 @@ const DiffPanelSheet = (props: {
   diffOpen: boolean;
   onCloseDiff: () => void;
 }) => {
+  const mobileViewport = useMobileViewport();
   return (
     <Sheet
       open={props.diffOpen}
@@ -31,10 +34,15 @@ const DiffPanelSheet = (props: {
       }}
     >
       <SheetPopup
-        side="right"
+        side={mobileViewport.isMobile ? "bottom" : "right"}
         showCloseButton={false}
         keepMounted
-        className="w-[min(88vw,820px)] max-w-[820px] p-0"
+        className={cn(
+          "p-0",
+          mobileViewport.isMobile
+            ? "app-mobile-viewport h-[var(--app-mobile-viewport-height)] w-full max-w-none rounded-t-[1.75rem] border-t border-border"
+            : "w-[min(88vw,820px)] max-w-[820px]",
+        )}
       >
         {props.children}
       </SheetPopup>

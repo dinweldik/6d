@@ -18,6 +18,7 @@ export function useHorizontalSwipe(input: {
   readonly minSwipeDistancePx?: number;
   readonly maxVerticalDriftPx?: number;
   readonly directionLockRatio?: number;
+  readonly excludeEdgeStartPx?: number;
   readonly ignoreInteractiveTargets?: boolean;
 }) {
   const stateRef = useRef<HorizontalSwipeState | null>(null);
@@ -26,6 +27,7 @@ export function useHorizontalSwipe(input: {
   const minSwipeDistancePx = input.minSwipeDistancePx ?? DEFAULT_MIN_SWIPE_DISTANCE_PX;
   const maxVerticalDriftPx = input.maxVerticalDriftPx ?? DEFAULT_MAX_VERTICAL_DRIFT_PX;
   const directionLockRatio = input.directionLockRatio ?? DEFAULT_DIRECTION_LOCK_RATIO;
+  const excludeEdgeStartPx = input.excludeEdgeStartPx ?? 0;
   const ignoreInteractiveTargets = input.ignoreInteractiveTargets ?? true;
   const onSwipeLeft = input.onSwipeLeft;
   const onSwipeRight = input.onSwipeRight;
@@ -47,13 +49,20 @@ export function useHorizontalSwipe(input: {
 
       const touch = event.touches[0];
       if (!touch) return;
+      if (
+        excludeEdgeStartPx > 0 &&
+        (touch.clientX <= excludeEdgeStartPx ||
+          window.innerWidth - touch.clientX <= excludeEdgeStartPx)
+      ) {
+        return;
+      }
 
       stateRef.current = {
         startX: touch.clientX,
         startY: touch.clientY,
       };
     },
-    [clearGestureState, enabled, ignoreInteractiveTargets],
+    [clearGestureState, enabled, excludeEdgeStartPx, ignoreInteractiveTargets],
   );
 
   const onTouchMoveCapture = useCallback(
