@@ -101,10 +101,10 @@ export default function BranchToolbar({
   if (!activeThreadId || !activeProject) return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1 sm:px-5">
+    <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-1.5 px-2 pb-2 pt-0.5 sm:gap-2 sm:px-5 sm:pb-3 sm:pt-1">
       <div className="flex shrink-0 items-center gap-2">
         {envLocked || activeWorktreePath ? (
-          <span className="border border-transparent px-[calc(--spacing(2)-1px)] text-sm font-medium text-muted-foreground/70 sm:text-xs">
+          <span className="border border-transparent px-[calc(--spacing(2)-1px)] text-xs font-medium text-muted-foreground/70">
             {activeWorktreePath ? "Worktree" : "Local"}
           </span>
         ) : (

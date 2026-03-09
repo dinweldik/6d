@@ -3117,7 +3117,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {/* Input bar */}
       <div
-        className={cn("px-2 pt-1 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-2.5 sm:pb-4")}
+        className={cn(
+          "px-2 pt-0.5 sm:px-5 sm:pt-2",
+          isGitRepo ? "pb-0.5 sm:pb-1" : "pb-1.5 sm:pb-4",
+        )}
       >
         <form
           ref={composerFormRef}
@@ -3126,7 +3129,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           data-chat-composer-form="true"
         >
           <div
-            className={`group rounded-[18px] border bg-card transition-colors duration-200 focus-within:border-ring/45 sm:rounded-[20px] ${
+            className={`group rounded-[16px] border bg-card transition-colors duration-200 focus-within:border-ring/45 sm:rounded-[20px] ${
               isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border"
             }`}
             onDragEnter={onComposerDragEnter}
@@ -3135,14 +3138,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
             onDrop={onComposerDrop}
           >
             {activePendingApproval ? (
-              <div className="rounded-t-[17px] border-b border-border/65 bg-muted/20 sm:rounded-t-[19px]">
+              <div className="rounded-t-[15px] border-b border-border/65 bg-muted/20 sm:rounded-t-[19px]">
                 <ComposerPendingApprovalPanel
                   approval={activePendingApproval}
                   pendingCount={pendingApprovals.length}
                 />
               </div>
             ) : pendingUserInputs.length > 0 ? (
-              <div className="rounded-t-[17px] border-b border-border/65 bg-muted/20 sm:rounded-t-[19px]">
+              <div className="rounded-t-[15px] border-b border-border/65 bg-muted/20 sm:rounded-t-[19px]">
                 <ComposerPendingUserInputPanel
                   pendingUserInputs={pendingUserInputs}
                   respondingRequestIds={respondingUserInputRequestIds}
@@ -3152,7 +3155,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 />
               </div>
             ) : showPlanFollowUpPrompt && activeProposedPlan ? (
-              <div className="rounded-t-[17px] border-b border-border/65 bg-muted/20 sm:rounded-t-[19px]">
+              <div className="rounded-t-[15px] border-b border-border/65 bg-muted/20 sm:rounded-t-[19px]">
                 <ComposerPlanFollowUpBanner
                   key={activeProposedPlan.id}
                   planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
@@ -3163,8 +3166,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
             {/* Textarea area */}
             <div
               className={cn(
-                "relative px-2.5 pb-1.5 sm:px-4 sm:pb-2",
-                hasComposerHeader ? "pt-2 sm:pt-3" : "pt-2.5 sm:pt-4",
+                "relative px-2 pb-1 sm:px-4 sm:pb-2",
+                hasComposerHeader ? "pt-1.5 sm:pt-3" : "pt-2 sm:pt-4",
               )}
             >
               {composerMenuOpen && !isComposerApprovalState && (
@@ -3277,7 +3280,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
             {/* Bottom toolbar */}
             {activePendingApproval ? (
-              <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
+              <div className="flex items-center justify-end gap-2 px-2 pb-2 sm:px-3 sm:pb-3">
                 <ComposerPendingApprovalActions
                   requestId={activePendingApproval.requestId}
                   isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
@@ -3285,8 +3288,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 />
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5 px-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-3 sm:pb-3">
-                <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:flex-1 sm:gap-1 sm:overflow-visible sm:pb-0">
+              <div className="flex flex-col gap-1 px-1.5 pb-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-3 sm:pb-3">
+                <div className="flex min-w-0 items-center gap-0 overflow-x-auto pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:flex-1 sm:gap-1 sm:overflow-visible sm:pb-0">
                   {/* Provider/model picker */}
                   <ProviderModelPicker
                     provider={selectedProvider}
@@ -3316,7 +3319,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   {/* Interaction mode toggle */}
                   <Button
                     variant="ghost"
-                    className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                    className="h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm"
                     size="sm"
                     type="button"
                     onClick={toggleInteractionMode}
@@ -3338,7 +3341,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   {/* Runtime mode toggle */}
                   <Button
                     variant="ghost"
-                    className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                    className="h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm"
                     size="sm"
                     type="button"
                     onClick={() =>
@@ -3360,7 +3363,19 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 </div>
 
                 {/* Right side: send / stop button */}
-                <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:shrink-0">
+                <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:gap-2">
+                  {mobileViewport.isMobile && (
+                    <ChatProjectActions
+                      activeProjectName={activeProject?.name}
+                      gitCwd={gitCwd}
+                      sourceControlOpen={sourceControlOpen}
+                      onSourceControlOpenChange={setSourceControlOpen}
+                      onOpenShells={() => {
+                        void openProjectShellView();
+                      }}
+                      compact
+                    />
+                  )}
                   {isPreparingWorktree ? (
                     <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
                   ) : null}
@@ -3461,7 +3476,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     ) : (
                       <button
                         type="submit"
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                        className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
                         disabled={
                           isSendBusy ||
                           isConnecting ||
@@ -3603,6 +3618,60 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
 }
 
+interface ChatProjectActionsProps {
+  activeProjectName: string | undefined;
+  gitCwd: string | null;
+  onOpenShells: () => void;
+  onSourceControlOpenChange: (open: boolean) => void;
+  sourceControlOpen: boolean;
+  compact?: boolean;
+  className?: string;
+}
+
+const ChatProjectActions = memo(function ChatProjectActions({
+  activeProjectName,
+  gitCwd,
+  onOpenShells,
+  onSourceControlOpenChange,
+  sourceControlOpen,
+  compact = false,
+  className,
+}: ChatProjectActionsProps) {
+  if (!activeProjectName) {
+    return null;
+  }
+
+  return (
+    <div className={cn("flex min-w-0 items-center gap-1.5", compact && "gap-1", className)}>
+      <Button
+        size={compact ? "icon-sm" : "xs"}
+        variant="outline"
+        className={cn(compact && "h-8 w-8 rounded-full")}
+        onClick={onOpenShells}
+        aria-label="Open shells"
+        title="Shells"
+      >
+        <TerminalIcon className="size-3.5" />
+        {!compact ? <span className="sr-only @sm/header-actions:not-sr-only">Shells</span> : null}
+      </Button>
+      <GitActionsControl
+        gitCwd={gitCwd}
+        open={sourceControlOpen}
+        onOpenChange={onSourceControlOpenChange}
+        projectName={activeProjectName}
+        {...(compact
+          ? {
+              triggerAriaLabel: "Open source control",
+              triggerClassName: "h-8 w-8 rounded-full",
+              triggerContent: <FolderIcon className="size-4" />,
+              triggerSize: "icon-sm" as const,
+            }
+          : {})}
+      />
+    </div>
+  );
+});
+
 interface ChatHeaderProps {
   activeThreadTitle: string;
   activeProjectName: string | undefined;
@@ -3643,22 +3712,14 @@ const ChatHeader = memo(function ChatHeader({
           </Badge>
         )}
       </div>
-      <div className="@container/header-actions -mx-0.5 flex min-w-0 items-center gap-1.5 overflow-x-auto px-0.5 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-1 sm:justify-end sm:gap-2 sm:overflow-visible sm:px-0 sm:pb-0 @sm/header-actions:gap-3">
-        {activeProjectName && (
-          <Button size="xs" variant="outline" onClick={onOpenShells}>
-            <TerminalIcon className="size-3.5" />
-            <span className="sr-only @sm/header-actions:not-sr-only">Shells</span>
-          </Button>
-        )}
-        {activeProjectName && (
-          <GitActionsControl
-            gitCwd={gitCwd}
-            open={sourceControlOpen}
-            onOpenChange={onSourceControlOpenChange}
-            projectName={activeProjectName}
-          />
-        )}
-      </div>
+      <ChatProjectActions
+        activeProjectName={activeProjectName}
+        gitCwd={gitCwd}
+        sourceControlOpen={sourceControlOpen}
+        onSourceControlOpenChange={onSourceControlOpenChange}
+        onOpenShells={onOpenShells}
+        className="@container/header-actions -mx-0.5 hidden min-w-0 overflow-x-auto px-0.5 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex md:flex-1 md:justify-end md:gap-2 md:overflow-visible md:px-0 md:pb-0 @sm/header-actions:gap-3"
+      />
     </div>
   );
 });
@@ -4963,7 +5024,7 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <Button
             size="sm"
             variant="ghost"
-            className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            className="h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm"
             disabled={props.disabled}
           />
         }
@@ -5100,7 +5161,7 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
           <Button
             size="sm"
             variant="ghost"
-            className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            className="h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm"
           />
         }
       >

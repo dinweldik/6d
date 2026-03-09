@@ -7,7 +7,14 @@ import type {
   GitStatusResult,
 } from "@t3tools/contracts";
 import { CheckIcon, ChevronDownIcon, FileIcon, FolderIcon } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useTheme } from "../hooks/useTheme";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
@@ -39,6 +46,11 @@ interface GitActionsControlProps {
   projectName?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  triggerAriaLabel?: string;
+  triggerClassName?: string;
+  triggerContent?: ReactNode;
+  triggerSize?: ComponentProps<typeof Button>["size"];
+  triggerVariant?: ComponentProps<typeof Button>["variant"];
 }
 
 type ChangeScope = Extract<GitFileDiffScope, "staged" | "unstaged">;
@@ -614,6 +626,11 @@ export default function GitActionsControl({
   projectName,
   open: openProp,
   onOpenChange,
+  triggerAriaLabel,
+  triggerClassName,
+  triggerContent,
+  triggerSize,
+  triggerVariant,
 }: GitActionsControlProps) {
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
@@ -748,13 +765,18 @@ export default function GitActionsControl({
 
   const trigger = (
     <Button
-      size="xs"
-      variant="outline"
-      className={cn(open && "bg-accent text-accent-foreground")}
+      size={triggerSize ?? "xs"}
+      variant={triggerVariant ?? "outline"}
+      className={cn(open && "bg-accent text-accent-foreground", triggerClassName)}
+      {...(triggerAriaLabel ? { "aria-label": triggerAriaLabel } : {})}
     >
-      <FolderIcon className="size-3.5" />
-      <span className="sr-only @sm/header-actions:not-sr-only">Source Control</span>
-      <ChevronDownIcon className="size-3.5 opacity-70" />
+      {triggerContent ?? (
+        <>
+          <FolderIcon className="size-3.5" />
+          <span className="sr-only @sm/header-actions:not-sr-only">Source Control</span>
+          <ChevronDownIcon className="size-3.5 opacity-70" />
+        </>
+      )}
     </Button>
   );
 
