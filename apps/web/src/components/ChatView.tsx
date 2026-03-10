@@ -111,6 +111,7 @@ import {
   summarizeTurnDiffStats,
   type TurnDiffTreeNode,
 } from "../lib/turnDiffTree";
+import { ensureThreadExists } from "../lib/ensureThreadExists";
 import BranchToolbar from "./BranchToolbar";
 import GitActionsControl from "./GitActionsControl";
 import { resolveShortcutCommand } from "../keybindings";
@@ -2238,20 +2239,24 @@ export default function ChatView({ threadId }: ChatViewProps) {
         selectedModel || (activeProject.model as ModelSlug) || DEFAULT_MODEL_BY_PROVIDER.codex;
 
       if (isLocalDraftThread) {
-        await api.orchestration.dispatchCommand({
-          type: "thread.create",
-          commandId: newCommandId(),
-          threadId: threadIdForSend,
-          projectId: activeProject.id,
-          title,
-          model: threadCreateModel,
-          runtimeMode,
-          interactionMode,
-          branch: nextThreadBranch,
-          worktreePath: nextThreadWorktreePath,
-          createdAt: activeThread.createdAt,
+        const threadCreateStatus = await ensureThreadExists({
+          api,
+          command: {
+            type: "thread.create",
+            commandId: newCommandId(),
+            threadId: threadIdForSend,
+            projectId: activeProject.id,
+            title,
+            model: threadCreateModel,
+            runtimeMode,
+            interactionMode,
+            branch: nextThreadBranch,
+            worktreePath: nextThreadWorktreePath,
+            createdAt: activeThread.createdAt,
+          },
+          onSnapshot: syncServerReadModel,
         });
-        createdServerThreadForLocalDraft = true;
+        createdServerThreadForLocalDraft = threadCreateStatus === "created";
       }
 
       let setupScript: ProjectScript | null = null;
@@ -2664,9 +2669,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
       sendInFlightRef.current = false;
       resetSendPhase();
     };
+    let createdServerThread = false;
 
-    await api.orchestration
-      .dispatchCommand({
+    await ensureThreadExists({
+      api,
+      command: {
         type: "thread.create",
         commandId: newCommandId(),
         threadId: nextThreadId,
@@ -2678,6 +2685,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
         branch: activeThread.branch,
         worktreePath: activeThread.worktreePath,
         createdAt,
+      },
+      onSnapshot: syncServerReadModel,
+    })
+      .then((status) => {
+        createdServerThread = status === "created";
       })
       .then(() =>
         api.orchestration.dispatchCommand({
@@ -2710,13 +2722,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
         });
       })
       .catch(async (err) => {
-        await api.orchestration
-          .dispatchCommand({
-            type: "thread.delete",
-            commandId: newCommandId(),
-            threadId: nextThreadId,
-          })
-          .catch(() => undefined);
+        if (createdServerThread) {
+          await api.orchestration
+            .dispatchCommand({
+              type: "thread.delete",
+              commandId: newCommandId(),
+              threadId: nextThreadId,
+            })
+            .catch(() => undefined);
+        }
         await api.orchestration
           .getSnapshot()
           .then((snapshot) => {
