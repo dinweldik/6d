@@ -1,7 +1,25 @@
+<p align="center">
+  <img src="./assets/prod/logo.svg" alt="fatma logo" width="140" />
+</p>
+
 # fatma
 
-fatma is a minimal web GUI for coding agents. Currently Codex-first, with Claude Code support coming soon.
-fatma started as a fork of t3code.
+```
+Run Codex across all your local projects from one mobile-friendly web UI, whether you are at your desk or working from your phone on the go.
+```
+
+fatma started as a fork of [t3code](https://github.com/pingdotgg/t3code).
+fatma is a GUI for coding agents. Currently Codex-first, with Claude Code support coming soon.
+
+The main idea is simple: you already have a folder full of projects, but they are not all in the same phase of life. Some are work projects from your 9 to 5. Some are old hobby repos you have not touched in months. Some are fresh experiments, side projects, or startup ideas you want to push further.
+
+fatma turns that projects folder into a browser-based control surface for Codex. You run `npx fatma-app` in the parent directory, open the web UI, and launch into any project from there. From the UI you can run Codex against a selected repo, start dev servers, execute shell commands, inspect code changes, and commit without bouncing between terminals.
+
+It is also meant to support the earliest stage of a project. When a new idea shows up, you can create a project directly from the web UI and let AI help you turn it into a first prototype immediately.
+
+That setup also works well beyond your laptop. You can run fatma on your home server or a VPS, expose it through Tailscale, and work from your phone while you are on the go. The goal is to let you move between projects and keep shipping from anywhere, whenever you want, without losing access to your usual development environment.
+
+When Codex finishes a task or gets blocked and needs input to continue, fatma can send Telegram notifications so you do not need to keep the UI open the whole time.
 
 ## How to use
 
@@ -11,18 +29,6 @@ fatma started as a fork of t3code.
 ```bash
 npx fatma-app
 ```
-
-You can also just install the desktop app. It's cooler.
-
-Install the [desktop app from the Releases page](https://github.com/dinweldik/6d/releases)
-
-## Some notes
-
-We are very very early in this project. Expect bugs.
-
-We are not accepting contributions yet.
-
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
 
 ## Development
 
@@ -62,11 +68,9 @@ If you are actively iterating on the frontend with `bun run dev`, keep using the
 
 See [docs/pwa.md](./docs/pwa.md) for the recommended install and update flow.
 
-### Notifications
+### Notifications (Telegram)
 
 Notifications are delivered through Telegram from the server. Configure a bot token and Telegram user/chat ID under Settings → Notifications, then use the test button to verify delivery.
-
-If you see "Checkpoint ref is unavailable for turn X" while looking at the diff viewer, the server is still scanning your turn history; wait a moment and reopen the diff, or click a different turn to trigger another fetch. The query will keep retrying for a few seconds while the checkpoint becomes available.
 
 ### Publishing to npm
 
