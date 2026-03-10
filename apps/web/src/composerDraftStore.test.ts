@@ -1,7 +1,12 @@
 import { ProjectId, ThreadId } from "@fatma/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type ComposerImageAttachment, useComposerDraftStore } from "./composerDraftStore";
+import * as composerDraftAttachmentPersistence from "./composerDraftAttachmentPersistence";
+import {
+  COMPOSER_DRAFT_STORAGE_KEY,
+  type ComposerImageAttachment,
+  useComposerDraftStore,
+} from "./composerDraftStore";
 
 function makeImage(input: {
   id: string;
@@ -27,6 +32,46 @@ function makeImage(input: {
     sizeBytes: file.size,
     previewUrl: input.previewUrl,
     file,
+  };
+}
+
+function makePersistedAttachment(input: {
+  id: string;
+  name?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  dataUrl?: string;
+}) {
+  return {
+    id: input.id,
+    name: input.name ?? "image.png",
+    mimeType: input.mimeType ?? "image/png",
+    sizeBytes: input.sizeBytes ?? 4,
+    dataUrl: input.dataUrl ?? "data:image/png;base64,AQIDBA==",
+  };
+}
+
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function createMemoryLocalStorage() {
+  const values = new Map<string, string>();
+  return {
+    clear(): void {
+      values.clear();
+    },
+    getItem(key: string): string | null {
+      return values.get(key) ?? null;
+    },
+    setItem(key: string, value: string): void {
+      values.set(key, value);
+    },
+    removeItem(key: string): void {
+      values.delete(key);
+    },
   };
 }
 
@@ -449,5 +494,145 @@ describe("composerDraftStore runtime and interaction settings", () => {
     store.setInteractionMode(threadId, null);
 
     expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toBeUndefined();
+  });
+});
+
+describe("composerDraftStore persistence", () => {
+  const threadId = ThreadId.makeUnsafe("thread-persistence");
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("./composerDraftAttachmentPersistence");
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("stores only attachment metadata in localStorage", async () => {
+    const memoryLocalStorage = createMemoryLocalStorage();
+    vi.stubGlobal("localStorage", memoryLocalStorage);
+    vi.doMock("./composerDraftAttachmentPersistence", async () => {
+      const actual =
+        await vi.importActual<typeof composerDraftAttachmentPersistence>(
+          "./composerDraftAttachmentPersistence",
+        );
+      return {
+        ...actual,
+        persistComposerDraftAttachments: vi.fn().mockResolvedValue(new Set(["img-1"])),
+      };
+    });
+    const { useComposerDraftStore, COMPOSER_DRAFT_STORAGE_KEY } = await import(
+      "./composerDraftStore"
+    );
+
+    useComposerDraftStore.getState().setPrompt(threadId, "with image");
+    useComposerDraftStore.getState().addImage(
+      threadId,
+      makeImage({
+        id: "img-1",
+        previewUrl: "blob:img-1",
+      }),
+    );
+    useComposerDraftStore.getState().syncPersistedAttachments(threadId, [
+      makePersistedAttachment({
+        id: "img-1",
+        dataUrl: "data:image/png;base64,AAEC",
+      }),
+    ]);
+    await flushAsyncWork();
+
+    const raw = memoryLocalStorage.getItem(COMPOSER_DRAFT_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const persisted = JSON.parse(raw as string) as {
+      state: {
+        draftsByThreadId: Record<string, { attachments: Array<Record<string, unknown>> }>;
+      };
+    };
+    expect(persisted.state.draftsByThreadId[threadId]?.attachments).toEqual([
+      {
+        id: "img-1",
+        name: "image.png",
+        mimeType: "image/png",
+        sizeBytes: 4,
+      },
+    ]);
+  });
+
+  it("swallows QuotaExceededError from localStorage persistence", async () => {
+    const memoryLocalStorage = createMemoryLocalStorage();
+    const quotaError = new DOMException("Quota exceeded", "QuotaExceededError");
+    memoryLocalStorage.setItem = () => {
+      throw quotaError;
+    };
+    vi.stubGlobal("localStorage", memoryLocalStorage);
+    const { useComposerDraftStore } = await import("./composerDraftStore");
+
+    expect(() => {
+      useComposerDraftStore.getState().setPrompt(threadId, "still in memory");
+    }).not.toThrow();
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]?.prompt).toBe(
+      "still in memory",
+    );
+  });
+
+  it("rehydrates persisted attachments from IndexedDB-backed storage", async () => {
+    const memoryLocalStorage = createMemoryLocalStorage();
+    const persistedAttachment = makePersistedAttachment({
+      id: "img-1",
+      dataUrl: "data:image/png;base64,AAEC",
+    });
+    vi.stubGlobal("localStorage", memoryLocalStorage);
+    vi.doMock("./composerDraftAttachmentPersistence", async () => {
+      const actual =
+        await vi.importActual<typeof composerDraftAttachmentPersistence>(
+          "./composerDraftAttachmentPersistence",
+        );
+      return {
+        ...actual,
+        loadPersistedComposerDraftAttachments: vi.fn().mockResolvedValue([persistedAttachment]),
+      };
+    });
+
+    memoryLocalStorage.setItem(
+      COMPOSER_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          draftsByThreadId: {
+            [threadId]: {
+              prompt: "rehydrate me",
+              attachments: [
+                {
+                  id: persistedAttachment.id,
+                  name: persistedAttachment.name,
+                  mimeType: persistedAttachment.mimeType,
+                  sizeBytes: persistedAttachment.sizeBytes,
+                },
+              ],
+            },
+          },
+          draftThreadsByThreadId: {},
+          projectDraftThreadIdByProjectId: {},
+        },
+        version: 2,
+      }),
+    );
+    const { useComposerDraftStore } = await import("./composerDraftStore");
+    await flushAsyncWork();
+
+    const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
+    expect(draft?.prompt).toBe("rehydrate me");
+    expect(draft?.images.map((image) => image.id)).toEqual(["img-1"]);
+    expect(draft?.persistedAttachmentMetadata).toEqual([
+      {
+        id: "img-1",
+        name: "image.png",
+        mimeType: "image/png",
+        sizeBytes: 4,
+      },
+    ]);
   });
 });
