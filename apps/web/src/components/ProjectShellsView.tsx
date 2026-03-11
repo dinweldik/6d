@@ -604,7 +604,7 @@ function ShellTabButton(props: {
     <button
       type="button"
       className={cn(
-        "group inline-flex shrink-0 items-center gap-2 rounded-2xl border text-left transition-colors duration-150",
+        "group inline-flex shrink-0 items-center gap-2 rounded-none border text-left transition-colors duration-150",
         props.mobile
           ? "min-w-[8.5rem] px-3 py-2.5"
           : "w-full justify-between px-3 py-3 text-sm",
@@ -640,7 +640,7 @@ function MobileAccessoryButton(props: {
     <Button
       aria-pressed={props.active}
       className={cn(
-        "h-12 rounded-2xl text-sm font-semibold",
+        "h-12 rounded-none before:rounded-none text-sm font-semibold",
         props.active && "border-primary bg-primary text-primary-foreground",
         props.tone === "danger" &&
           !props.active &&
@@ -668,7 +668,7 @@ function DesktopShellListButton(props: {
     <button
       type="button"
       className={cn(
-        "flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors duration-150",
+        "flex w-full items-start gap-2 rounded-none border px-3 py-2.5 text-left transition-colors duration-150",
         props.isActive
           ? "border-border bg-accent/70 text-foreground shadow-[0_8px_28px_rgba(0,0,0,0.12)]"
           : "border-transparent bg-transparent text-muted-foreground hover:border-border/60 hover:bg-accent/40 hover:text-foreground",
@@ -969,8 +969,8 @@ export default function ProjectShellsView({
   if (!mobileViewport.isMobile) {
     return (
       <div className="flex h-full min-h-0 overflow-hidden bg-background text-foreground">
-        <section className="flex min-h-0 flex-1 flex-col px-4 py-4 lg:px-5 lg:py-5">
-          <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-[1.4rem] border border-border/70 bg-card/55 shadow-[0_20px_64px_rgba(0,0,0,0.16)]">
+        <section className="flex min-h-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-none border border-border/70 bg-card/55 shadow-[0_20px_64px_rgba(0,0,0,0.16)]">
             {activeShell ? (
               <ShellTerminalViewport
                 ref={terminalHandleRef}
@@ -993,7 +993,7 @@ export default function ProjectShellsView({
                   Add a shell for {project.name} when you need one.
                 </p>
                 <Button
-                  className="mt-5 rounded-xl"
+                  className="mt-5 rounded-none before:rounded-none"
                   onClick={() => {
                     void createShellAndOpen();
                   }}
@@ -1020,7 +1020,7 @@ export default function ProjectShellsView({
             <div className="flex items-center gap-1">
               <Button
                 aria-label={newShellShortcutLabel ? `Add shell (${newShellShortcutLabel})` : "Add shell"}
-                className="rounded-lg"
+                className="rounded-none before:rounded-none"
                 size="icon-xs"
                 title={newShellShortcutLabel ? `Add shell (${newShellShortcutLabel})` : "Add shell"}
                 variant="outline"
@@ -1036,7 +1036,7 @@ export default function ProjectShellsView({
                     ? `Delete active shell (${closeShellShortcutLabel})`
                     : "Delete active shell"
                 }
-                className="rounded-lg"
+                className="rounded-none before:rounded-none"
                 disabled={!activeShell}
                 size="icon-xs"
                 title={
@@ -1108,7 +1108,7 @@ export default function ProjectShellsView({
           <div className="flex items-center gap-2">
             <Button
               aria-label={newShellShortcutLabel ? `Add shell (${newShellShortcutLabel})` : "Add shell"}
-              className="rounded-xl"
+              className="rounded-none before:rounded-none"
               size="icon-sm"
               title={newShellShortcutLabel ? `Add shell (${newShellShortcutLabel})` : "Add shell"}
               variant="outline"
@@ -1124,7 +1124,7 @@ export default function ProjectShellsView({
                   ? `Delete active shell (${closeShellShortcutLabel})`
                   : "Delete active shell"
               }
-              className="rounded-xl"
+              className="rounded-none before:rounded-none"
               disabled={!activeShell}
               size="icon-sm"
               title={
@@ -1159,14 +1159,14 @@ export default function ProjectShellsView({
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <section className="flex min-h-0 flex-1 flex-col sm:px-5 sm:py-5">
+        <section className="flex min-h-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1 overflow-hidden border border-white/8 bg-card/70 backdrop-blur-sm rounded-none border-r-0 border-l-0 shadow-none">
             {activeShell ? (
               <>
                 {mobileSelectionMode ? (
                   <div className="absolute top-3 right-3 z-20">
                     <Button
-                      className="rounded-full"
+                      className="rounded-none before:rounded-none"
                       size="xs"
                       variant="secondary"
                       onClick={() => {
@@ -1201,7 +1201,7 @@ export default function ProjectShellsView({
                   shell is created.
                 </p>
                 <Button
-                  className="mt-5 rounded-xl"
+                  className="mt-5 rounded-none before:rounded-none"
                   onClick={() => {
                     void createShellAndOpen();
                   }}
