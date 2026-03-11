@@ -1056,7 +1056,8 @@ export default function ProjectShellsView({
 
           <div className="flex items-center justify-between border-border/70 border-b px-3 py-2 text-[11px] text-muted-foreground/70">
             <span>
-              {collection.shells.length} shell{collection.shells.length === 1 ? "" : "s"}
+              {collection.shells.length} shell
+              {collection.shells.length === 1 ? "" : "s"}
             </span>
             <span>{collection.runningShellIds.length} running</span>
           </div>
@@ -1097,7 +1098,8 @@ export default function ProjectShellsView({
             <div className="mt-1 flex items-center gap-2">
               <h1 className="truncate text-base font-semibold sm:text-lg">{project.name}</h1>
               <span className="hidden rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
-                {collection.shells.length} shell{collection.shells.length === 1 ? "" : "s"}
+                {collection.shells.length} shell
+                {collection.shells.length === 1 ? "" : "s"}
               </span>
             </div>
             <p className="truncate text-xs text-muted-foreground/70 sm:text-sm">
@@ -1218,8 +1220,8 @@ export default function ProjectShellsView({
       </div>
 
       {activeShell ? (
-        <div className="shrink-0 border-border/70 border-t bg-background/92 backdrop-blur-xl">
-          <div className="grid grid-cols-5 gap-2 px-3 py-1">
+        <div className="shrink-0 bg-background/92 backdrop-blur-xl">
+          <div className="grid grid-cols-5 gap-2 px-3 py-2">
             {mobileAccessoryButtons.map((button) => (
               <MobileAccessoryButton
                 key={button.label}

@@ -126,7 +126,6 @@ import {
   CircleAlertIcon,
   FileIcon,
   FolderIcon,
-  GitBranchIcon,
   EllipsisIcon,
   FolderClosedIcon,
   LockIcon,
@@ -3146,9 +3145,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
           activeProjectName={activeProject?.name}
           isGitRepo={isGitRepo}
           gitCwd={gitCwd}
-          onOpenSourceControl={() => {
-            void openProjectSourceControlView();
-          }}
           sourceControlOpen={sourceControlOpen}
           onSourceControlOpenChange={setSourceControlOpen}
           onOpenShells={() => {
@@ -3435,7 +3431,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     className={cn(
                       "h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm",
                       mobileViewport.isMobile &&
-                        "h-9 rounded-full border border-border/70 bg-background/70 px-3 text-sm text-foreground/85",
+                        "h-9 w-9 rounded-full border border-border/70 bg-background/70 px-0 text-sm text-foreground/85",
                     )}
                     size="sm"
                     type="button"
@@ -3461,7 +3457,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     className={cn(
                       "h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm",
                       mobileViewport.isMobile &&
-                        "h-9 rounded-full border border-border/70 bg-background/70 px-3 text-sm text-foreground/85",
+                        "h-9 w-9 rounded-full border border-border/70 bg-background/70 px-0 text-sm text-foreground/85",
                     )}
                     size="sm"
                     type="button"
@@ -3481,6 +3477,22 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       {runtimeMode === "full-access" ? "Full access" : "Supervised"}
                     </span>
                   </Button>
+
+                  {mobileViewport.isMobile ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 w-9 shrink-0 rounded-full border border-border/70 bg-background/70 px-0 text-foreground/85"
+                      onClick={openComposerImagePicker}
+                      disabled={isConnecting || isSendBusy}
+                      aria-label="Add image"
+                      title="Add image"
+                    >
+                      <PaperclipIcon className="size-4" />
+                      <span className="sr-only">Add image</span>
+                    </Button>
+                  ) : null}
                 </div>
 
                 {/* Right side: send / stop button */}
@@ -3490,34 +3502,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     mobileViewport.isMobile && "gap-2",
                   )}
                 >
-                  {mobileViewport.isMobile && (
-                    <ChatProjectActions
-                      activeProjectName={activeProject?.name}
-                      gitCwd={gitCwd}
-                      onOpenSourceControl={() => {
-                        void openProjectSourceControlView();
-                      }}
-                      sourceControlOpen={sourceControlOpen}
-                      onSourceControlOpenChange={setSourceControlOpen}
-                      onOpenShells={() => {
-                        void openProjectShellView();
-                      }}
-                      compact
-                    />
-                  )}
-                  <Button
-                    type="button"
-                    size={mobileViewport.isMobile ? "sm" : "icon-sm"}
-                    variant="outline"
-                    className={cn(mobileViewport.isMobile ? "rounded-full px-3" : "rounded-full")}
-                    onClick={openComposerImagePicker}
-                    disabled={isConnecting || isSendBusy}
-                    aria-label="Attach images"
-                    title="Attach images"
-                  >
-                    <PaperclipIcon className="size-4" />
-                    {mobileViewport.isMobile ? <span>Add image</span> : null}
-                  </Button>
+                  {!mobileViewport.isMobile ? (
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={openComposerImagePicker}
+                      disabled={isConnecting || isSendBusy}
+                      aria-label="Attach images"
+                      title="Attach images"
+                    >
+                      <PaperclipIcon className="size-4" />
+                    </Button>
+                  ) : null}
                   {isPreparingWorktree ? (
                     <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
                   ) : null}
@@ -3852,22 +3850,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
 interface ChatProjectActionsProps {
   activeProjectName: string | undefined;
   gitCwd: string | null;
-  onOpenSourceControl: () => void;
   onOpenShells: () => void;
   onSourceControlOpenChange: (open: boolean) => void;
   sourceControlOpen: boolean;
-  compact?: boolean;
   className?: string;
 }
 
 const ChatProjectActions = memo(function ChatProjectActions({
   activeProjectName,
   gitCwd,
-  onOpenSourceControl,
   onOpenShells,
   onSourceControlOpenChange,
   sourceControlOpen,
-  compact = false,
   className,
 }: ChatProjectActionsProps) {
   if (!activeProjectName) {
@@ -3875,37 +3869,23 @@ const ChatProjectActions = memo(function ChatProjectActions({
   }
 
   return (
-    <div className={cn("flex min-w-0 items-center gap-1.5", compact && "gap-1", className)}>
+    <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
       <Button
-        size={compact ? "icon-sm" : "xs"}
+        size="xs"
         variant="outline"
-        className={cn(compact && "h-8 w-8 rounded-full")}
         onClick={onOpenShells}
         aria-label="Open shells"
         title="Shells"
       >
         <TerminalIcon className="size-3.5" />
-        {!compact ? <span className="sr-only @sm/header-actions:not-sr-only">Shells</span> : null}
+        <span className="sr-only @sm/header-actions:not-sr-only">Shells</span>
       </Button>
-      {compact ? (
-        <Button
-          size="icon-sm"
-          variant="outline"
-          className="h-8 w-8 rounded-full"
-          onClick={onOpenSourceControl}
-          aria-label="Open source control"
-          title="Source Control"
-        >
-          <GitBranchIcon className="size-4" />
-        </Button>
-      ) : (
-        <GitActionsControl
-          gitCwd={gitCwd}
-          open={sourceControlOpen}
-          onOpenChange={onSourceControlOpenChange}
-          projectName={activeProjectName}
-        />
-      )}
+      <GitActionsControl
+        gitCwd={gitCwd}
+        open={sourceControlOpen}
+        onOpenChange={onSourceControlOpenChange}
+        projectName={activeProjectName}
+      />
     </div>
   );
 });
@@ -3915,7 +3895,6 @@ interface ChatHeaderProps {
   activeProjectName: string | undefined;
   isGitRepo: boolean;
   gitCwd: string | null;
-  onOpenSourceControl: () => void;
   onOpenShells: () => void;
   onSourceControlOpenChange: (open: boolean) => void;
   sourceControlOpen: boolean;
@@ -3926,7 +3905,6 @@ const ChatHeader = memo(function ChatHeader({
   activeProjectName,
   isGitRepo,
   gitCwd,
-  onOpenSourceControl,
   onOpenShells,
   onSourceControlOpenChange,
   sourceControlOpen,
@@ -3954,7 +3932,6 @@ const ChatHeader = memo(function ChatHeader({
       <ChatProjectActions
         activeProjectName={activeProjectName}
         gitCwd={gitCwd}
-        onOpenSourceControl={onOpenSourceControl}
         sourceControlOpen={sourceControlOpen}
         onSourceControlOpenChange={onSourceControlOpenChange}
         onOpenShells={onOpenShells}

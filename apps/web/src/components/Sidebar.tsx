@@ -704,7 +704,10 @@ export default function Sidebar({
 
       const trimmed = newTitle.trim();
       if (trimmed.length === 0) {
-        toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+        toastManager.add({
+          type: "warning",
+          title: "Thread title cannot be empty",
+        });
         finishRename();
         return;
       }
@@ -1248,11 +1251,6 @@ export default function Sidebar({
           <AppBrandMark />
           <AppWordmark />
         </div>
-        {isMobile ? (
-          <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground/65">
-            Projects, threads, and shells
-          </span>
-        ) : null}
       </div>
     </div>
   );
@@ -1392,8 +1390,9 @@ export default function Sidebar({
                           </span>
                           {isMobile ? (
                             <span className="block truncate text-[11px] text-muted-foreground/65">
-                              {projectThreads.length} thread{projectThreads.length === 1 ? "" : "s"}{" "}
-                              • {projectShells.shells.length} shell
+                              {projectThreads.length} thread
+                              {projectThreads.length === 1 ? "" : "s"} •{" "}
+                              {projectShells.shells.length} shell
                               {projectShells.shells.length === 1 ? "" : "s"}
                             </span>
                           ) : null}

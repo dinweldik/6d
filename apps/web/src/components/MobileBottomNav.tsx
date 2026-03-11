@@ -21,7 +21,8 @@ import {
 } from "../selectedChatStore";
 import { useStore } from "../store";
 
-const MOBILE_BOTTOM_NAV_HEIGHT = "5rem";
+// Reserve only the nav chrome; route containers add the bottom safe-area separately.
+const MOBILE_BOTTOM_NAV_HEIGHT = "3.75rem";
 
 function iconClass(active: boolean): string {
   return active ? "text-foreground" : "text-muted-foreground/72";
@@ -33,7 +34,9 @@ export function mobileBottomNavHeight(isVisible: boolean): string {
 
 export default function MobileBottomNav() {
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const mobileViewport = useMobileViewport();
   const draftThreadsByThreadId = useComposerDraftStore((store) => store.draftThreadsByThreadId);
   const projects = useStore((store) => store.projects);
@@ -108,7 +111,7 @@ export default function MobileBottomNav() {
     >
       <nav
         aria-label="Mobile navigation"
-        className="mx-auto flex w-full items-stretch gap-1.5 px-2 pt-2 pb-[calc(var(--safe-area-inset-bottom)+0.4rem)]"
+        className="mx-auto flex w-full items-stretch gap-1.5 px-2 pt-1 pb-[calc(var(--safe-area-inset-bottom)+0.4rem)]"
       >
         <button
           type="button"
