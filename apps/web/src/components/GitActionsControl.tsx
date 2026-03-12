@@ -391,14 +391,17 @@ function SourceControlPanel({
         !isMobileLayout && "max-h-[min(82vh,56rem)]",
       )}
     >
-      <div className="space-y-1">
-        <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-          Source Control
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Stage files, commit changes, fetch and pull the current branch, and inspect diffs inline.
-        </p>
-      </div>
+      {!isMobileLayout && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+            Source Control
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Stage files, commit changes, fetch and pull the current branch, and inspect diffs
+            inline.
+          </p>
+        </div>
+      )}
 
       {isLoadingRepoState ? (
         <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
@@ -630,7 +633,6 @@ function SourceControlPanel({
           ) : null}
         </>
       )}
-
       {(branchListError || gitStatusError) && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/6 px-4 py-3 text-sm text-destructive">
           {branchListError ?? gitStatusError}
