@@ -1265,6 +1265,40 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("keeps the mobile interaction-mode toggle pressed after the composer regains focus", async () => {
+    const mounted = await mountChatView({
+      viewport: TEXT_VIEWPORT_MATRIX[2],
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-target-mobile-toggle" as MessageId,
+        targetText: "mobile toggle target",
+      }),
+    });
+
+    try {
+      const initialModeButton = await waitForInteractionModeButton("Chat");
+      expect(initialModeButton).toHaveAttribute("aria-pressed", "false");
+
+      initialModeButton.click();
+
+      await vi.waitFor(
+        async () => {
+          const activeModeButton = await waitForInteractionModeButton("Plan");
+          expect(activeModeButton).toHaveAttribute("aria-pressed", "true");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      const composerEditor = await waitForComposerEditor();
+      composerEditor.focus();
+      await waitForLayout();
+
+      const activeModeButton = await waitForInteractionModeButton("Plan");
+      expect(activeModeButton).toHaveAttribute("aria-pressed", "true");
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("hides completed task-list panels after the latest turn settles", async () => {
     const mounted = await mountChatView({
       viewport: TEXT_VIEWPORT_MATRIX[2],

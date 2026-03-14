@@ -16,9 +16,7 @@ import { Cache, Cause, Duration, Effect, Layer, Option, Schema, Stream } from "e
 import { makeDrainableWorker } from "@fatma/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
-import { GitCore } from "../../git/Services/GitCore.ts";
 import { ProviderAdapterRequestError, ProviderServiceError } from "../../provider/Errors.ts";
-import { TextGeneration } from "../../git/Services/TextGeneration.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import {
@@ -71,8 +69,6 @@ const serverCommandId = (tag: string): CommandId =>
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
-const WORKTREE_BRANCH_PREFIX = "fatma";
-const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(`^${WORKTREE_BRANCH_PREFIX}\\/[0-9a-f]{8}$`);
 
 function isUnknownPendingApprovalRequestError(cause: Cause.Cause<ProviderServiceError>): boolean {
   const error = Cause.squash(cause);
@@ -90,38 +86,9 @@ function isUnknownPendingApprovalRequestError(cause: Cause.Cause<ProviderService
   );
 }
 
-function isTemporaryWorktreeBranch(branch: string): boolean {
-  return TEMP_WORKTREE_BRANCH_PATTERN.test(branch.trim().toLowerCase());
-}
-
-function buildGeneratedWorktreeBranchName(raw: string): string {
-  const normalized = raw
-    .trim()
-    .toLowerCase()
-    .replace(/^refs\/heads\//, "")
-    .replace(/['"`]/g, "");
-
-  const withoutPrefix = normalized.startsWith(`${WORKTREE_BRANCH_PREFIX}/`)
-    ? normalized.slice(`${WORKTREE_BRANCH_PREFIX}/`.length)
-    : normalized;
-
-  const branchFragment = withoutPrefix
-    .replace(/[^a-z0-9/_-]+/g, "-")
-    .replace(/\/+/g, "/")
-    .replace(/-+/g, "-")
-    .replace(/^[./_-]+|[./_-]+$/g, "")
-    .slice(0, 64)
-    .replace(/[./_-]+$/g, "");
-
-  const safeFragment = branchFragment.length > 0 ? branchFragment : "update";
-  return `${WORKTREE_BRANCH_PREFIX}/${safeFragment}`;
-}
-
 const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
   const providerService = yield* ProviderService;
-  const git = yield* GitCore;
-  const textGeneration = yield* TextGeneration;
   const handledTurnStartKeys = yield* Cache.make<string, true>({
     capacity: HANDLED_TURN_START_KEY_MAX,
     timeToLive: HANDLED_TURN_START_KEY_TTL,
@@ -358,74 +325,6 @@ const make = Effect.gen(function* () {
     });
   });
 
-  const maybeGenerateAndRenameWorktreeBranchForFirstTurn = Effect.fnUntraced(function* (input: {
-    readonly threadId: ThreadId;
-    readonly branch: string | null;
-    readonly worktreePath: string | null;
-    readonly messageId: string;
-    readonly messageText: string;
-    readonly attachments?: ReadonlyArray<ChatAttachment>;
-  }) {
-    if (!input.branch || !input.worktreePath) {
-      return;
-    }
-    if (!isTemporaryWorktreeBranch(input.branch)) {
-      return;
-    }
-
-    const thread = yield* resolveThread(input.threadId);
-    if (!thread) {
-      return;
-    }
-
-    const userMessages = thread.messages.filter((message) => message.role === "user");
-    if (userMessages.length !== 1 || userMessages[0]?.id !== input.messageId) {
-      return;
-    }
-
-    const oldBranch = input.branch;
-    const cwd = input.worktreePath;
-    const attachments = input.attachments ?? [];
-    yield* textGeneration
-      .generateBranchName({
-        cwd,
-        message: input.messageText,
-        ...(attachments.length > 0 ? { attachments } : {}),
-      })
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            "provider command reactor failed to generate worktree branch name; skipping rename",
-            { threadId: input.threadId, cwd, oldBranch, reason: error.message },
-          ),
-        ),
-        Effect.flatMap((generated) => {
-          if (!generated) return Effect.void;
-
-          const targetBranch = buildGeneratedWorktreeBranchName(generated.branch);
-          if (targetBranch === oldBranch) return Effect.void;
-
-          return Effect.flatMap(
-            git.renameBranch({ cwd, oldBranch, newBranch: targetBranch }),
-            (renamed) =>
-              orchestrationEngine.dispatch({
-                type: "thread.meta.update",
-                commandId: serverCommandId("worktree-branch-rename"),
-                threadId: input.threadId,
-                branch: renamed.branch,
-                worktreePath: cwd,
-              }),
-          );
-        }),
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
-            "provider command reactor failed to generate or rename worktree branch",
-            { threadId: input.threadId, cwd, oldBranch, cause: Cause.pretty(cause) },
-          ),
-        ),
-      );
-  });
-
   const processTurnStartRequested = Effect.fnUntraced(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
@@ -451,15 +350,6 @@ const make = Effect.gen(function* () {
       });
       return;
     }
-
-    yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
-      threadId: event.payload.threadId,
-      branch: thread.branch,
-      worktreePath: thread.worktreePath,
-      messageId: message.id,
-      messageText: message.text,
-      ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
-    }).pipe(Effect.forkScoped);
 
     yield* sendTurnForThread({
       threadId: event.payload.threadId,

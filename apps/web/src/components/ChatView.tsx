@@ -35,7 +35,7 @@ import {
   useState,
   useId,
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -43,7 +43,7 @@ import {
   type VirtualItem,
   useVirtualizer,
 } from "@tanstack/react-virtual";
-import { gitBranchesQueryOptions, gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
+import { gitBranchesQueryOptions } from "~/lib/gitReactQuery";
 import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
 import { serverConfigQueryOptions } from "~/lib/serverReactQuery";
 
@@ -113,7 +113,6 @@ import {
   type TurnDiffTreeNode,
 } from "../lib/turnDiffTree";
 import { ensureThreadExists } from "../lib/ensureThreadExists";
-import BranchToolbar from "./BranchToolbar";
 import GitActionsControl from "./GitActionsControl";
 import { resolveShortcutCommand } from "../keybindings";
 import ChatMarkdown from "./ChatMarkdown";
@@ -175,7 +174,7 @@ import {
   ensureProjectShell,
   runProjectScriptInShell,
 } from "../projectShellRunner";
-import { projectScriptIdFromCommand, setupProjectScript } from "~/projectScripts";
+import { projectScriptIdFromCommand } from "~/projectScripts";
 import { readNativeApi } from "~/nativeApi";
 import {
   getAppModelOptions,
@@ -188,7 +187,6 @@ import {
 import {
   type ComposerImageAttachment,
   type ComposerImageAttachmentPayload,
-  type DraftThreadEnvMode,
   type DraftThreadState,
   useComposerDraftStore,
   useComposerThreadDraft,
@@ -243,8 +241,6 @@ const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
 const EMPTY_PROVIDER_STATUSES: ServerProviderStatus[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
-const WORKTREE_BRANCH_PREFIX = "fatma";
-
 function workToneClass(tone: "thinking" | "tool" | "info" | "error"): string {
   if (tone === "error") return "text-rose-300/50 dark:text-rose-300/50";
   if (tone === "tool") return "text-muted-foreground/70";
@@ -318,8 +314,8 @@ function buildLocalDraftThread(
     createdAt: draftThread.createdAt,
     latestTurn: null,
     lastVisitedAt: draftThread.createdAt,
-    branch: draftThread.branch,
-    worktreePath: draftThread.worktreePath,
+    branch: null,
+    worktreePath: null,
     turnDiffSummaries: [],
     activities: [],
     proposedPlans: [],
@@ -384,13 +380,7 @@ type ComposerCommandItem =
       showFastBadge: boolean;
     };
 
-type SendPhase = "idle" | "preparing-worktree" | "sending-turn";
-
-function buildTemporaryWorktreeBranchName(): string {
-  // Keep the 8-hex suffix shape for backend temporary-branch detection.
-  const token = randomUuid().slice(0, 8).toLowerCase();
-  return `${WORKTREE_BRANCH_PREFIX}/${token}`;
-}
+type SendPhase = "idle" | "sending-turn";
 
 function createRetryComposerImageSnapshots(
   attachments: ComposerImageAttachment[],
@@ -544,14 +534,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const markThreadVisited = useStore((store) => store.markThreadVisited);
   const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const setStoreThreadError = useStore((store) => store.setError);
-  const setStoreThreadBranch = useStore((store) => store.setThreadBranch);
   const setSelectedChat = useSelectedChatStore((store) => store.setSelectedChat);
   const { settings } = useAppSettings();
   const navigate = useNavigate();
   const mobileViewport = useMobileViewport();
   const { resolvedTheme } = useTheme();
-  const queryClient = useQueryClient();
-  const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
   const composerDraft = useComposerThreadDraft(threadId);
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
@@ -816,7 +803,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const phase = derivePhase(activeThread?.session ?? null);
   const isComposerStagePending = pendingComposerStageCount > 0;
   const isSendBusy = sendPhase !== "idle" || isComposerStagePending;
-  const isPreparingWorktree = sendPhase === "preparing-worktree";
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
   const nowIso = new Date(nowTick).toISOString();
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
@@ -1149,7 +1135,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     latestTurnSettled,
     timelineEntries,
   ]);
-  const gitCwd = activeThread?.worktreePath ?? activeProject?.cwd ?? null;
+  const gitCwd = activeProject?.cwd ?? null;
   const canOpenSourceControl = gitCwd !== null;
   const openProjectSourceControlView = useCallback(async () => {
     if (!activeProject) return;
@@ -1281,11 +1267,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   // Default true while loading to avoid toolbar flicker.
   const isGitRepo = branchesQuery.data?.isRepo ?? true;
 
-  const envLocked = Boolean(
-    activeThread &&
-    (activeThread.messages.length > 0 ||
-      (activeThread.session !== null && activeThread.session.status !== "closed")),
-  );
   const setThreadError = useCallback(
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
@@ -1378,8 +1359,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
         const shell = await runProjectScriptInShell({
           project: activeProject,
           script,
-          cwd: options?.cwd ?? gitCwd ?? activeProject.cwd,
-          worktreePath: options?.worktreePath ?? activeThread.worktreePath ?? null,
+          cwd: options?.cwd ?? activeProject.cwd,
+          worktreePath: options?.worktreePath ?? null,
           ...(options?.env ? { env: options.env } : {}),
           ...(options?.preferNewShell ? { preferNewShell: true } : {}),
         });
@@ -1403,7 +1384,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       activeProject,
       activeThread,
       activeThreadId,
-      gitCwd,
       isServerThread,
       setThreadError,
       navigate,
@@ -1863,13 +1843,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeExpandedImage, expandedImage, navigateExpandedImage]);
 
-  const activeWorktreePath = activeThread?.worktreePath;
-  const envMode: DraftThreadEnvMode = activeWorktreePath
-    ? "worktree"
-    : isLocalDraftThread
-      ? (draftThread?.envMode ?? "local")
-      : "local";
-
   useEffect(() => {
     if (phase !== "running") return;
     const timer = window.setInterval(() => {
@@ -2216,22 +2189,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (!activeProject) return;
     const threadIdForSend = activeThread.id;
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
-    const baseBranchForWorktree =
-      isFirstMessage && envMode === "worktree" && !activeThread.worktreePath
-        ? activeThread.branch
-        : null;
-
-    // In worktree mode, require an explicit base branch so we don't silently
-    // fall back to local execution when branch selection is missing.
-    const shouldCreateWorktree =
-      isFirstMessage && envMode === "worktree" && !activeThread.worktreePath;
-    if (shouldCreateWorktree && !activeThread.branch) {
-      setStoreThreadError(
-        threadIdForSend,
-        "Select a base branch before sending in New worktree mode.",
-      );
-      return;
-    }
 
     const attachmentPayloadById = new Map(
       composerAttachmentPayloadsSnapshot.map((payload) => [payload.id, payload]),
@@ -2248,7 +2205,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
-    beginSendPhase(baseBranchForWorktree ? "preparing-worktree" : "sending-turn");
+    beginSendPhase("sending-turn");
 
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -2295,34 +2252,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
     let createdServerThreadForLocalDraft = false;
     let turnStartSucceeded = false;
-    let nextThreadBranch = activeThread.branch;
-    let nextThreadWorktreePath = activeThread.worktreePath;
     await (async () => {
-      // On first message: lock in branch + create worktree if needed.
-      if (baseBranchForWorktree) {
-        beginSendPhase("preparing-worktree");
-        const newBranch = buildTemporaryWorktreeBranchName();
-        const result = await createWorktreeMutation.mutateAsync({
-          cwd: activeProject.cwd,
-          branch: baseBranchForWorktree,
-          newBranch,
-        });
-        nextThreadBranch = result.worktree.branch;
-        nextThreadWorktreePath = result.worktree.path;
-        if (isServerThread) {
-          await api.orchestration.dispatchCommand({
-            type: "thread.meta.update",
-            commandId: newCommandId(),
-            threadId: threadIdForSend,
-            branch: result.worktree.branch,
-            worktreePath: result.worktree.path,
-          });
-          // Keep local thread state in sync immediately so terminal drawer opens
-          // with the worktree cwd/env instead of briefly using the project root.
-          setStoreThreadBranch(threadIdForSend, result.worktree.branch, result.worktree.path);
-        }
-      }
-
       let firstComposerImageName: string | null = null;
       if (composerImagesSnapshot.length > 0) {
         const firstComposerImage = composerImagesSnapshot[0];
@@ -2354,40 +2284,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
             model: threadCreateModel,
             runtimeMode,
             interactionMode,
-            branch: nextThreadBranch,
-            worktreePath: nextThreadWorktreePath,
+            branch: null,
+            worktreePath: null,
             createdAt: activeThread.createdAt,
           },
           onSnapshot: syncServerReadModel,
         });
         createdServerThreadForLocalDraft = threadCreateStatus === "created";
-      }
-
-      let setupScript: ProjectScript | null = null;
-      if (baseBranchForWorktree) {
-        setupScript = setupProjectScript(activeProject.scripts);
-      }
-      if (setupScript) {
-        let shouldRunSetupScript = false;
-        if (isServerThread) {
-          shouldRunSetupScript = true;
-        } else {
-          if (createdServerThreadForLocalDraft) {
-            shouldRunSetupScript = true;
-          }
-        }
-        if (shouldRunSetupScript) {
-          const setupScriptOptions: Parameters<typeof runProjectScript>[1] = {
-            worktreePath: nextThreadWorktreePath,
-            navigateToShell: false,
-            allowLocalDraftThread: createdServerThreadForLocalDraft,
-            preferNewShell: true,
-          };
-          if (nextThreadWorktreePath) {
-            setupScriptOptions.cwd = nextThreadWorktreePath;
-          }
-          await runProjectScript(setupScript, setupScriptOptions);
-        }
       }
 
       // Auto-title from first message
@@ -2783,8 +2686,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
         model: nextThreadModel,
         runtimeMode,
         interactionMode: "default",
-        branch: activeThread.branch,
-        worktreePath: activeThread.worktreePath,
+        branch: null,
+        worktreePath: null,
         createdAt,
       },
       onSnapshot: syncServerReadModel,
@@ -2901,16 +2804,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [scheduleComposerFocus, setComposerDraftCodexFastMode, threadId],
   );
-  const onEnvModeChange = useCallback(
-    (mode: DraftThreadEnvMode) => {
-      if (isLocalDraftThread) {
-        setDraftThreadContext(threadId, { envMode: mode });
-      }
-      scheduleComposerFocus();
-    },
-    [isLocalDraftThread, scheduleComposerFocus, setDraftThreadContext, threadId],
-  );
-
   const applyPromptReplacement = useCallback(
     (
       rangeStart: number,
@@ -3282,9 +3175,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           "px-2 pt-0.5 sm:px-5 sm:pt-2",
           mobileViewport.isMobile
             ? "border-t border-border/60 bg-background/92 pb-[calc(var(--safe-area-inset-bottom)+0.5rem)] backdrop-blur-md"
-            : isGitRepo
-              ? "pb-1"
-              : "pb-4",
+            : "pb-4",
         )}
       >
         <form
@@ -3464,13 +3355,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
               <div
                 className={cn(
                   "flex flex-col gap-1 px-1.5 pb-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-3 sm:pb-3",
-                  mobileViewport.isMobile && "gap-2 px-2 pb-2.5",
+                  mobileViewport.isMobile &&
+                    "flex-row items-center justify-between gap-2 px-2 pb-2.5",
                 )}
               >
                 <div
                   className={cn(
                     "flex min-w-0 items-center gap-0 overflow-x-auto pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:flex-1 sm:gap-1 sm:overflow-visible sm:pb-0",
-                    mobileViewport.isMobile && "flex-wrap gap-1.5 overflow-visible",
+                    mobileViewport.isMobile &&
+                      "min-w-0 flex-1 flex-nowrap gap-1.5 overflow-x-auto pr-1",
                   )}
                 >
                   {/* Provider/model picker */}
@@ -3506,10 +3399,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       "h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm",
                       mobileViewport.isMobile &&
                         "h-9 w-9 rounded-full border border-border/70 bg-background/70 px-0 text-sm text-foreground/85",
+                      mobileViewport.isMobile &&
+                        interactionMode === "plan" &&
+                        "border-primary/35 bg-accent text-foreground",
                     )}
                     size="sm"
                     type="button"
                     onClick={toggleInteractionMode}
+                    aria-pressed={interactionMode === "plan"}
+                    data-pressed={interactionMode === "plan" ? "" : undefined}
                     title={
                       interactionMode === "plan"
                         ? "Plan mode — click to return to normal chat mode"
@@ -3532,6 +3430,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       "h-7 shrink-0 whitespace-nowrap px-1.5 text-[13px] text-muted-foreground/70 hover:text-foreground/80 sm:h-7 sm:px-3 sm:text-sm",
                       mobileViewport.isMobile &&
                         "h-9 w-9 rounded-full border border-border/70 bg-background/70 px-0 text-sm text-foreground/85",
+                      mobileViewport.isMobile &&
+                        runtimeMode === "full-access" &&
+                        "border-primary/35 bg-accent text-foreground",
                     )}
                     size="sm"
                     type="button"
@@ -3540,6 +3441,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         runtimeMode === "full-access" ? "approval-required" : "full-access",
                       )
                     }
+                    aria-pressed={runtimeMode === "full-access"}
+                    data-pressed={runtimeMode === "full-access" ? "" : undefined}
                     title={
                       runtimeMode === "full-access"
                         ? "Full access — click to require approvals"
@@ -3573,7 +3476,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 <div
                   className={cn(
                     "flex w-full items-center justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:gap-2",
-                    mobileViewport.isMobile && "gap-2",
+                    mobileViewport.isMobile && "w-auto shrink-0 gap-1.5",
                   )}
                 >
                   {!mobileViewport.isMobile ? (
@@ -3589,9 +3492,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     >
                       <PaperclipIcon className="size-4" />
                     </Button>
-                  ) : null}
-                  {isPreparingWorktree ? (
-                    <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
                   ) : null}
                   {activePendingProgress ? (
                     <div className="flex items-center gap-2">
@@ -3630,7 +3530,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         type="button"
                         size="sm"
                         variant="destructive"
-                        className="h-10 rounded-full px-4"
+                        className="h-9 rounded-full px-3.5 text-sm"
                         onClick={() => void onInterrupt()}
                       >
                         <span
@@ -3707,20 +3607,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       <Button
                         type="submit"
                         size="sm"
-                        className="h-10 rounded-full px-4"
+                        className="h-9 gap-1.5 rounded-full px-3.5 text-sm"
                         disabled={
                           isSendBusy ||
                           isConnecting ||
                           (!prompt.trim() && composerImages.length === 0)
                         }
                         aria-label={
-                          isConnecting
-                            ? "Connecting"
-                            : isPreparingWorktree
-                              ? "Preparing worktree"
-                              : isSendBusy
-                                ? "Sending"
-                                : "Send message"
+                          isConnecting ? "Connecting" : isSendBusy ? "Sending" : "Send message"
                         }
                       >
                         {isConnecting || isSendBusy ? "Sending..." : "Send"}
@@ -3752,13 +3646,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           (!prompt.trim() && composerImages.length === 0)
                         }
                         aria-label={
-                          isConnecting
-                            ? "Connecting"
-                            : isPreparingWorktree
-                              ? "Preparing worktree"
-                              : isSendBusy
-                                ? "Sending"
-                                : "Send message"
+                          isConnecting ? "Connecting" : isSendBusy ? "Sending" : "Send message"
                         }
                       >
                         {isConnecting || isSendBusy ? (
@@ -3806,15 +3694,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
           </div>
         </form>
       </div>
-
-      {isGitRepo && (
-        <BranchToolbar
-          threadId={activeThread.id}
-          onEnvModeChange={onEnvModeChange}
-          envLocked={envLocked}
-          onComposerFocusRequest={scheduleComposerFocus}
-        />
-      )}
 
       {expandedImage && expandedImageItem && (
         <div
@@ -5507,7 +5386,7 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
     low: "Low",
     medium: "Medium",
     high: "High",
-    xhigh: "Extra High",
+    xhigh: "xHigh",
   };
   const triggerLabel = [
     reasoningLabelByOption[props.effort],

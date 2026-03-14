@@ -39,10 +39,10 @@ import {
 import { useProjectShellStore, selectProjectShellCollection } from "../projectShellStore";
 import { type Thread } from "../types";
 import { derivePendingApprovals } from "../session-logic";
-import { gitRemoveWorktreeMutationOptions, gitStatusQueryOptions } from "../lib/gitReactQuery";
+import { gitStatusQueryOptions } from "../lib/gitReactQuery";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
-import { type DraftThreadEnvMode, useComposerDraftStore } from "../composerDraftStore";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { onServerWelcome } from "../wsNativeApi";
 import { filterProjectBrowserEntries, isHiddenProjectBrowserEntry } from "../projectBrowserEntries";
 import { toastManager } from "./ui/toast";
@@ -85,7 +85,6 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "./ui/sidebar";
-import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
@@ -324,7 +323,6 @@ export default function Sidebar({
   const { data: serverConfig } = useQuery(serverConfigQueryOptions());
   const keybindings = serverConfig?.keybindings ?? EMPTY_KEYBINDINGS;
   const queryClient = useQueryClient();
-  const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const [addingProject, setAddingProject] = useState(false);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
   const [isAddingProject, setIsAddingProject] = useState(false);
@@ -355,18 +353,14 @@ export default function Sidebar({
     () =>
       threads.map((thread) => ({
         threadId: thread.id,
-        branch: thread.branch,
-        cwd: thread.worktreePath ?? projectCwdById.get(thread.projectId) ?? null,
+        cwd: projectCwdById.get(thread.projectId) ?? null,
       })),
     [projectCwdById, threads],
   );
   const threadGitStatusCwds = useMemo(
     () => [
       ...new Set(
-        threadGitTargets
-          .filter((target) => target.branch !== null)
-          .map((target) => target.cwd)
-          .filter((cwd): cwd is string => cwd !== null),
+        threadGitTargets.map((target) => target.cwd).filter((cwd): cwd is string => cwd !== null),
       ),
     ],
     [threadGitTargets],
@@ -392,9 +386,7 @@ export default function Sidebar({
     const map = new Map<ThreadId, ThreadPr>();
     for (const target of threadGitTargets) {
       const status = target.cwd ? statusByCwd.get(target.cwd) : undefined;
-      const branchMatches =
-        target.branch !== null && status?.branch !== null && status?.branch === target.branch;
-      map.set(target.threadId, branchMatches ? (status?.pr ?? null) : null);
+      map.set(target.threadId, status?.pr ?? null);
     }
     return map;
   }, [threadGitStatusCwds, threadGitStatusQueries, threadGitTargets]);
@@ -471,35 +463,17 @@ export default function Sidebar({
   }, [serverConfig?.cwd]);
 
   const handleNewThread = useCallback(
-    (
-      projectId: ProjectId,
-      options?: {
-        branch?: string | null;
-        worktreePath?: string | null;
-        envMode?: DraftThreadEnvMode;
-      },
-    ): Promise<void> => {
+    (projectId: ProjectId): Promise<void> => {
       const {
         clearProjectDraftThreadId,
         getDraftThread,
         getDraftThreadByProjectId,
-        setDraftThreadContext,
         setProjectDraftThreadId,
       } = useComposerDraftStore.getState();
-      const hasBranchOption = options?.branch !== undefined;
-      const hasWorktreePathOption = options?.worktreePath !== undefined;
-      const hasEnvModeOption = options?.envMode !== undefined;
       const storedDraftThread = getDraftThreadByProjectId(projectId);
       const latestActiveDraftThread = routeThreadId ? getDraftThread(routeThreadId) : null;
       if (storedDraftThread) {
         return (async () => {
-          if (hasBranchOption || hasWorktreePathOption || hasEnvModeOption) {
-            setDraftThreadContext(storedDraftThread.threadId, {
-              ...(hasBranchOption ? { branch: options?.branch ?? null } : {}),
-              ...(hasWorktreePathOption ? { worktreePath: options?.worktreePath ?? null } : {}),
-              ...(hasEnvModeOption ? { envMode: options?.envMode } : {}),
-            });
-          }
           setProjectDraftThreadId(projectId, storedDraftThread.threadId);
           if (routeThreadId === storedDraftThread.threadId) {
             return;
@@ -517,13 +491,6 @@ export default function Sidebar({
         routeThreadId &&
         latestActiveDraftThread.projectId === projectId
       ) {
-        if (hasBranchOption || hasWorktreePathOption || hasEnvModeOption) {
-          setDraftThreadContext(routeThreadId, {
-            ...(hasBranchOption ? { branch: options?.branch ?? null } : {}),
-            ...(hasWorktreePathOption ? { worktreePath: options?.worktreePath ?? null } : {}),
-            ...(hasEnvModeOption ? { envMode: options?.envMode } : {}),
-          });
-        }
         setProjectDraftThreadId(projectId, routeThreadId);
         return Promise.resolve();
       }
@@ -532,9 +499,6 @@ export default function Sidebar({
       return (async () => {
         setProjectDraftThreadId(projectId, threadId, {
           createdAt,
-          branch: options?.branch ?? null,
-          worktreePath: options?.worktreePath ?? null,
-          envMode: options?.envMode ?? "local",
           runtimeMode: DEFAULT_RUNTIME_MODE,
         });
 
@@ -792,23 +756,6 @@ export default function Sidebar({
           return;
         }
       }
-      const threadProject = projects.find((project) => project.id === thread.projectId);
-      const orphanedWorktreePath = getOrphanedWorktreePathForThread(threads, threadId);
-      const displayWorktreePath = orphanedWorktreePath
-        ? formatWorktreePathForDisplay(orphanedWorktreePath)
-        : null;
-      const canDeleteWorktree = orphanedWorktreePath !== null && threadProject !== undefined;
-      const shouldDeleteWorktree =
-        canDeleteWorktree &&
-        (await api.dialogs.confirm(
-          [
-            "This thread is the only one linked to this worktree:",
-            displayWorktreePath ?? orphanedWorktreePath,
-            "",
-            "Delete the worktree too?",
-          ].join("\n"),
-        ));
-
       if (thread.session && thread.session.status !== "closed") {
         await api.orchestration
           .dispatchCommand({
@@ -849,31 +796,6 @@ export default function Sidebar({
           void navigate({ to: "/", replace: true });
         }
       }
-
-      if (!shouldDeleteWorktree || !orphanedWorktreePath || !threadProject) {
-        return;
-      }
-
-      try {
-        await removeWorktreeMutation.mutateAsync({
-          cwd: threadProject.cwd,
-          path: orphanedWorktreePath,
-          force: true,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error removing worktree.";
-        console.error("Failed to remove orphaned worktree after thread deletion", {
-          threadId,
-          projectCwd: threadProject.cwd,
-          worktreePath: orphanedWorktreePath,
-          error,
-        });
-        toastManager.add({
-          type: "error",
-          title: "Thread deleted, but worktree removal failed",
-          description: `Could not remove ${displayWorktreePath ?? orphanedWorktreePath}. ${message}`,
-        });
-      }
     },
     [
       appSettings.confirmThreadDelete,
@@ -881,8 +803,6 @@ export default function Sidebar({
       clearProjectDraftThreadById,
       markThreadUnread,
       navigate,
-      projects,
-      removeWorktreeMutation,
       routeThreadId,
       threads,
     ],
@@ -1045,11 +965,7 @@ export default function Sidebar({
 
       event.preventDefault();
       event.stopPropagation();
-      void handleNewThread(projectId, {
-        branch: activeThread?.branch ?? activeDraftThread?.branch ?? null,
-        worktreePath: activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null,
-        envMode: activeDraftThread?.envMode ?? (activeThread?.worktreePath ? "worktree" : "local"),
-      });
+      void handleNewThread(projectId);
     };
 
     window.addEventListener("keydown", onWindowKeyDown);

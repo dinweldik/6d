@@ -2,16 +2,14 @@ import { cn } from "../lib/utils";
 import { useMobileViewport } from "../mobileViewport";
 import type { Project } from "../types";
 import GitActionsControl from "./GitActionsControl";
-import { Badge } from "./ui/badge";
+import ProjectBranchSelector from "./ProjectBranchSelector";
 
 export default function ProjectSourceControlView({
   gitCwd,
   project,
-  selectedThreadTitle = null,
 }: {
   gitCwd: string;
   project: Project;
-  selectedThreadTitle?: string | null;
 }) {
   const mobileViewport = useMobileViewport();
 
@@ -28,14 +26,7 @@ export default function ProjectSourceControlView({
           <p className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground/60 uppercase">
             Source Control
           </p>
-          <div className="mt-1 flex items-center gap-2">
-            <h1 className="truncate text-base font-semibold sm:text-lg">{project.name}</h1>
-            {selectedThreadTitle ? (
-              <Badge variant="outline" className="hidden max-w-40 truncate sm:inline-flex">
-                {selectedThreadTitle}
-              </Badge>
-            ) : null}
-          </div>
+          <h1 className="mt-1 truncate text-base font-semibold sm:text-lg">{project.name}</h1>
           <p className="truncate text-xs text-muted-foreground/70 sm:text-sm">{gitCwd}</p>
         </div>
       </header>
@@ -47,6 +38,19 @@ export default function ProjectSourceControlView({
             !mobileViewport.isMobile && "max-w-5xl",
           )}
         >
+          <section className="mb-4 rounded-xl border border-border/70 bg-background/70 p-3 sm:p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-0.5">
+                <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                  Branch
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  This checkout applies to the whole project. Every thread uses it on the next turn.
+                </p>
+              </div>
+              <ProjectBranchSelector projectId={project.id} cwd={gitCwd} />
+            </div>
+          </section>
           <GitActionsControl presentation="inline" gitCwd={gitCwd} projectName={project.name} />
         </div>
       </div>
