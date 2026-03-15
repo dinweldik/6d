@@ -901,8 +901,8 @@ export default function ProjectShellsView({
           </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
-          <div className="flex min-h-0 flex-1 rounded-2xl border border-border/70 bg-card/40 p-2 shadow-sm">
+        <main className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 border border-border/70 bg-card/40 shadow-sm">
             {activeShell ? (
               <ShellTerminalViewport
                 ref={terminalHandleRef}
