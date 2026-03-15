@@ -49,6 +49,7 @@ import { serverConfigQueryOptions } from "~/lib/serverReactQuery";
 
 import { isElectron } from "../env";
 import { stripDiffSearchParams } from "../diffRouteSearch";
+import { stripProjectToolsSearchParams } from "../projectTools";
 import {
   type ComposerSlashCommand,
   type ComposerTrigger,
@@ -113,8 +114,8 @@ import {
   type TurnDiffTreeNode,
 } from "../lib/turnDiffTree";
 import { ensureThreadExists } from "../lib/ensureThreadExists";
-import GitActionsControl from "./GitActionsControl";
 import { resolveShortcutCommand } from "../keybindings";
+import { useProjectToolsNavigation } from "../useProjectToolsNavigation";
 import ChatMarkdown from "./ChatMarkdown";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import {
@@ -127,6 +128,7 @@ import {
   FolderIcon,
   EllipsisIcon,
   FolderClosedIcon,
+  GitBranchIcon,
   LockIcon,
   LockOpenIcon,
   PaperclipIcon,
@@ -538,6 +540,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const { settings } = useAppSettings();
   const navigate = useNavigate();
   const mobileViewport = useMobileViewport();
+  const {
+    activeProjectId: activeProjectToolProjectId,
+    activeProjectTool,
+    openShells,
+    openSourceControl,
+    toggleShells,
+    toggleSourceControl,
+  } = useProjectToolsNavigation();
   const { resolvedTheme } = useTheme();
   const composerDraft = useComposerThreadDraft(threadId);
   const prompt = composerDraft.prompt;
@@ -590,7 +600,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
     Record<string, string[]>
   >({});
-  const [sourceControlOpen, setSourceControlOpen] = useState(false);
   const [composerCursor, setComposerCursor] = useState(() => prompt.length);
   const [composerTrigger, setComposerTrigger] = useState<ComposerTrigger | null>(() =>
     detectComposerTrigger(prompt, prompt.length),
@@ -1137,24 +1146,29 @@ export default function ChatView({ threadId }: ChatViewProps) {
   ]);
   const gitCwd = activeProject?.cwd ?? null;
   const canOpenSourceControl = gitCwd !== null;
+  const sourceControlPanelOpen =
+    activeProject !== undefined &&
+    activeProjectTool === "source-control" &&
+    activeProjectToolProjectId === activeProject.id;
+  const shellsPanelOpen =
+    activeProject !== undefined &&
+    activeProjectTool === "shells" &&
+    activeProjectToolProjectId === activeProject.id;
   const openProjectSourceControlView = useCallback(async () => {
     if (!activeProject) return;
-    await navigate({
-      to: "/source-control/$projectId",
-      params: {
-        projectId: activeProject.id,
-      },
-    });
-  }, [activeProject, navigate]);
+    await openSourceControl(activeProject.id);
+  }, [activeProject, openSourceControl]);
+  const toggleProjectSourceControlView = useCallback(async () => {
+    if (!activeProject) {
+      return;
+    }
+    await toggleSourceControl(activeProject.id);
+  }, [activeProject, toggleSourceControl]);
   const mobileEdgeSwipeHandlers = useMobileEdgeSwipe({
     enabled: mobileViewport.isMobile,
     rightEnabled: canOpenSourceControl,
     onSwipeFromRightEdge: () => {
-      if (mobileViewport.isMobile) {
-        void openProjectSourceControlView();
-        return;
-      }
-      setSourceControlOpen(true);
+      void openProjectSourceControlView();
     },
   });
   const composerTriggerKind = composerTrigger?.kind ?? null;
@@ -1332,15 +1346,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
         ? createProjectShell(activeProject.id, defaultProjectShellConfig(activeProject))
         : ensureProjectShell(activeProject.id, defaultProjectShellConfig(activeProject));
       setActiveProjectShell(activeProject.id, shell.id);
-      await navigate({
-        to: "/shells/$projectId",
-        params: {
-          projectId: activeProject.id,
-        },
-      });
+      await openShells(activeProject.id);
     },
-    [activeProject, navigate, setActiveProjectShell],
+    [activeProject, openShells, setActiveProjectShell],
   );
+  const toggleProjectShellView = useCallback(async () => {
+    if (!activeProject) {
+      return;
+    }
+    if (shellsPanelOpen) {
+      await toggleShells(activeProject.id);
+      return;
+    }
+    await openProjectShellView();
+  }, [activeProject, openProjectShellView, shellsPanelOpen, toggleShells]);
   const runProjectScript = useCallback(
     async (
       script: ProjectScript,
@@ -1366,12 +1385,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         });
         if (options?.navigateToShell !== false) {
           setActiveProjectShell(activeProject.id, shell.id);
-          await navigate({
-            to: "/shells/$projectId",
-            params: {
-              projectId: activeProject.id,
-            },
-          });
+          await openShells(activeProject.id);
         }
       } catch (error) {
         setThreadError(
@@ -1386,7 +1400,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       activeThreadId,
       isServerThread,
       setThreadError,
-      navigate,
+      openShells,
       setActiveProjectShell,
     ],
   );
@@ -1692,17 +1706,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       window.cancelAnimationFrame(frame);
     };
   }, [activeThread?.id, focusComposer]);
-
-  useEffect(() => {
-    if (canOpenSourceControl || !sourceControlOpen) {
-      return;
-    }
-    setSourceControlOpen(false);
-  }, [canOpenSourceControl, sourceControlOpen]);
-
-  useEffect(() => {
-    setSourceControlOpen(false);
-  }, [activeThread?.id]);
 
   useEffect(() => {
     if (!mobileViewport.isMobile || mobileViewport.viewportHeight === null) {
@@ -3044,7 +3047,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         to: "/$threadId",
         params: { threadId },
         search: (previous) => {
-          const rest = stripDiffSearchParams(previous);
+          const rest = stripProjectToolsSearchParams(stripDiffSearchParams(previous));
           return filePath
             ? { ...rest, diff: "1", diffTurnId: turnId, diffFilePath: filePath }
             : { ...rest, diff: "1", diffTurnId: turnId };
@@ -3111,11 +3114,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
           activeThreadTitle={activeThread.title}
           activeProjectName={activeProject?.name}
           isGitRepo={isGitRepo}
-          gitCwd={gitCwd}
-          sourceControlOpen={sourceControlOpen}
-          onSourceControlOpenChange={setSourceControlOpen}
-          onOpenShells={() => {
-            void openProjectShellView();
+          shellsOpen={shellsPanelOpen}
+          sourceControlOpen={sourceControlPanelOpen}
+          onToggleSourceControl={() => {
+            void toggleProjectSourceControlView();
+          }}
+          onToggleShells={() => {
+            void toggleProjectShellView();
           }}
         />
       </header>
@@ -3802,18 +3807,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
 interface ChatProjectActionsProps {
   activeProjectName: string | undefined;
-  gitCwd: string | null;
-  onOpenShells: () => void;
-  onSourceControlOpenChange: (open: boolean) => void;
+  onToggleShells: () => void;
+  onToggleSourceControl: () => void;
+  shellsOpen: boolean;
   sourceControlOpen: boolean;
   className?: string;
 }
 
 const ChatProjectActions = memo(function ChatProjectActions({
   activeProjectName,
-  gitCwd,
-  onOpenShells,
-  onSourceControlOpenChange,
+  onToggleShells,
+  onToggleSourceControl,
+  shellsOpen,
   sourceControlOpen,
   className,
 }: ChatProjectActionsProps) {
@@ -3825,20 +3830,24 @@ const ChatProjectActions = memo(function ChatProjectActions({
     <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
       <Button
         size="xs"
-        variant="outline"
-        onClick={onOpenShells}
-        aria-label="Open shells"
+        variant={shellsOpen ? "secondary" : "outline"}
+        onClick={onToggleShells}
+        aria-label="Toggle shells"
         title="Shells"
       >
         <TerminalIcon className="size-3.5" />
         <span className="sr-only @sm/header-actions:not-sr-only">Shells</span>
       </Button>
-      <GitActionsControl
-        gitCwd={gitCwd}
-        open={sourceControlOpen}
-        onOpenChange={onSourceControlOpenChange}
-        projectName={activeProjectName}
-      />
+      <Button
+        size="xs"
+        variant={sourceControlOpen ? "secondary" : "outline"}
+        onClick={onToggleSourceControl}
+        aria-label="Toggle source control"
+        title={`Source control for ${activeProjectName}`}
+      >
+        <GitBranchIcon className="size-3.5" />
+        <span className="sr-only @sm/header-actions:not-sr-only">Source Control</span>
+      </Button>
     </div>
   );
 });
@@ -3847,9 +3856,9 @@ interface ChatHeaderProps {
   activeThreadTitle: string;
   activeProjectName: string | undefined;
   isGitRepo: boolean;
-  gitCwd: string | null;
-  onOpenShells: () => void;
-  onSourceControlOpenChange: (open: boolean) => void;
+  onToggleShells: () => void;
+  onToggleSourceControl: () => void;
+  shellsOpen: boolean;
   sourceControlOpen: boolean;
 }
 
@@ -3857,9 +3866,9 @@ const ChatHeader = memo(function ChatHeader({
   activeThreadTitle,
   activeProjectName,
   isGitRepo,
-  gitCwd,
-  onOpenShells,
-  onSourceControlOpenChange,
+  onToggleShells,
+  onToggleSourceControl,
+  shellsOpen,
   sourceControlOpen,
 }: ChatHeaderProps) {
   return (
@@ -3884,10 +3893,10 @@ const ChatHeader = memo(function ChatHeader({
       </div>
       <ChatProjectActions
         activeProjectName={activeProjectName}
-        gitCwd={gitCwd}
+        shellsOpen={shellsOpen}
         sourceControlOpen={sourceControlOpen}
-        onSourceControlOpenChange={onSourceControlOpenChange}
-        onOpenShells={onOpenShells}
+        onToggleSourceControl={onToggleSourceControl}
+        onToggleShells={onToggleShells}
         className="@container/header-actions -mx-0.5 hidden min-w-0 overflow-x-auto px-0.5 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex md:flex-1 md:justify-end md:gap-2 md:overflow-visible md:px-0 md:pb-0 @sm/header-actions:gap-3"
       />
     </div>

@@ -2,26 +2,53 @@ import { ProjectId } from "@fatma/contracts";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { useProjectToolsSurfaceMode } from "../hooks/useProjectToolsSurfaceMode";
+import { resolveDesktopProjectToolsBaseRoute } from "../projectTools";
+import { useSelectedChatStore } from "../selectedChatStore";
 import ProjectSourceControlView from "../components/ProjectSourceControlView";
 import { SidebarInset } from "../components/ui/sidebar";
 import { useStore } from "../store";
 
 function ProjectSourceControlRouteView() {
   const navigate = useNavigate();
+  const projectToolsSurfaceMode = useProjectToolsSurfaceMode();
+  const selectedThreadId = useSelectedChatStore((store) => store.threadId);
   const projectId = Route.useParams({
     select: (params) => ProjectId.makeUnsafe(params.projectId),
   });
   const project = useStore(
     (store) => store.projects.find((entry) => entry.id === projectId) ?? null,
   );
+  const threads = useStore((store) => store.threads);
 
   useEffect(() => {
     if (!project) {
       void navigate({ to: "/", replace: true });
+      return;
     }
-  }, [navigate, project]);
+    if (projectToolsSurfaceMode !== "sidepanel") {
+      return;
+    }
+
+    void navigate({
+      ...resolveDesktopProjectToolsBaseRoute({
+        projectId: project.id,
+        selectedThreadId,
+        threads,
+      }),
+      replace: true,
+      search: {
+        projectTool: "source-control",
+        projectToolProjectId: project.id,
+      },
+    });
+  }, [navigate, project, projectToolsSurfaceMode, selectedThreadId, threads]);
 
   if (!project) {
+    return null;
+  }
+
+  if (projectToolsSurfaceMode === "sidepanel") {
     return null;
   }
 

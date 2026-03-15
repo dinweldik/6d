@@ -2,16 +2,14 @@ import { ThreadId } from "@fatma/contracts";
 import { createFileRoute, retainSearchParams, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, type ReactNode, useCallback, useEffect } from "react";
 
+import { parseAppRouteSearch, type AppRouteSearch } from "../appRouteSearch";
 import ChatView from "../components/ChatView";
 import { DiffWorkerPoolProvider } from "../components/DiffWorkerPoolProvider";
 import { useComposerDraftStore } from "../composerDraftStore";
-import {
-  type DiffRouteSearch,
-  parseDiffRouteSearch,
-  stripDiffSearchParams,
-} from "../diffRouteSearch";
+import { stripDiffSearchParams } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useMobileViewport } from "../mobileViewport";
+import { stripProjectToolsSearchParams } from "../projectTools";
 import { useStore } from "../store";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
@@ -188,7 +186,7 @@ function ChatThreadRouteView() {
       to: "/$threadId",
       params: { threadId },
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
+        const rest = stripProjectToolsSearchParams(stripDiffSearchParams(previous));
         return {
           ...rest,
           diff: undefined,
@@ -201,7 +199,7 @@ function ChatThreadRouteView() {
       to: "/$threadId",
       params: { threadId },
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
+        const rest = stripProjectToolsSearchParams(stripDiffSearchParams(previous));
         return { ...rest, diff: "1" };
       },
     });
@@ -251,9 +249,11 @@ function ChatThreadRouteView() {
 }
 
 export const Route = createFileRoute("/_chat/$threadId")({
-  validateSearch: (search) => parseDiffRouteSearch(search),
+  validateSearch: (search) => parseAppRouteSearch(search),
   search: {
-    middlewares: [retainSearchParams<DiffRouteSearch>(["diff"])],
+    middlewares: [
+      retainSearchParams<AppRouteSearch>(["diff", "projectTool", "projectToolProjectId"]),
+    ],
   },
   component: ChatThreadRouteView,
 });

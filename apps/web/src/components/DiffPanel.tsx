@@ -19,6 +19,7 @@ import { preferredTerminalEditor, resolvePathLinkTarget } from "../terminal-link
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { isElectron } from "../env";
 import { useMobileViewport } from "../mobileViewport";
+import { stripProjectToolsSearchParams } from "../projectTools";
 import { useTheme } from "../hooks/useTheme";
 import { resolveDiffThemeName } from "../lib/diffRendering";
 import {
@@ -211,7 +212,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         to: "/$threadId",
         params: { threadId: activeThread.id },
         search: (previous) => {
-          const rest = stripDiffSearchParams(previous);
+          const rest = stripProjectToolsSearchParams(stripDiffSearchParams(previous));
           return {
             ...rest,
             diff: "1",
@@ -230,7 +231,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       to: "/$threadId",
       params: { threadId: activeThread.id },
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
+        const rest = stripProjectToolsSearchParams(stripDiffSearchParams(previous));
         return { ...rest, diff: "1", diffTurnId: turnId };
       },
     });
@@ -241,7 +242,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       to: "/$threadId",
       params: { threadId: activeThread.id },
       search: (previous) => {
-        const rest = stripDiffSearchParams(previous);
+        const rest = stripProjectToolsSearchParams(stripDiffSearchParams(previous));
         return { ...rest, diff: "1" };
       },
     });

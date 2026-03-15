@@ -2,6 +2,9 @@ import { ProjectId } from "@fatma/contracts";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { useProjectToolsSurfaceMode } from "../hooks/useProjectToolsSurfaceMode";
+import { resolveDesktopProjectToolsBaseRoute } from "../projectTools";
+import { useSelectedChatStore } from "../selectedChatStore";
 import ProjectShellsView from "../components/ProjectShellsView";
 import { SidebarInset } from "../components/ui/sidebar";
 import { useProjectShellStore } from "../projectShellStore";
@@ -9,6 +12,8 @@ import { useStore } from "../store";
 
 function ProjectShellRouteView() {
   const navigate = useNavigate();
+  const projectToolsSurfaceMode = useProjectToolsSurfaceMode();
+  const selectedThreadId = useSelectedChatStore((store) => store.threadId);
   const setActiveShell = useProjectShellStore((store) => store.setActiveShell);
   const { projectId, shellId } = Route.useParams({
     select: (params) => ({
@@ -19,6 +24,7 @@ function ProjectShellRouteView() {
   const project = useStore(
     (store) => store.projects.find((entry) => entry.id === projectId) ?? null,
   );
+  const threads = useStore((store) => store.threads);
 
   useEffect(() => {
     if (!project) {
@@ -27,6 +33,22 @@ function ProjectShellRouteView() {
     }
 
     setActiveShell(project.id, shellId);
+    if (projectToolsSurfaceMode === "sidepanel") {
+      void navigate({
+        ...resolveDesktopProjectToolsBaseRoute({
+          projectId: project.id,
+          selectedThreadId,
+          threads,
+        }),
+        replace: true,
+        search: {
+          projectTool: "shells",
+          projectToolProjectId: project.id,
+        },
+      });
+      return;
+    }
+
     void navigate({
       to: "/shells/$projectId",
       params: {
@@ -34,9 +56,21 @@ function ProjectShellRouteView() {
       },
       replace: true,
     });
-  }, [navigate, project, setActiveShell, shellId]);
+  }, [
+    navigate,
+    project,
+    projectToolsSurfaceMode,
+    selectedThreadId,
+    setActiveShell,
+    shellId,
+    threads,
+  ]);
 
   if (!project) {
+    return null;
+  }
+
+  if (projectToolsSurfaceMode === "sidepanel") {
     return null;
   }
 

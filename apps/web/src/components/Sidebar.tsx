@@ -45,6 +45,7 @@ import { readNativeApi } from "../nativeApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { onServerWelcome } from "../wsNativeApi";
 import { filterProjectBrowserEntries, isHiddenProjectBrowserEntry } from "../projectBrowserEntries";
+import { useProjectToolsNavigation } from "../useProjectToolsNavigation";
 import { toastManager } from "./ui/toast";
 import {
   getDesktopUpdateActionError,
@@ -308,6 +309,11 @@ export default function Sidebar({
   );
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
+  const {
+    activeProjectId: activeProjectToolsProjectId,
+    activeProjectTool,
+    openShells,
+  } = useProjectToolsNavigation();
   const { settings: appSettings } = useAppSettings();
   const routeThreadId = useParams({
     strict: false,
@@ -865,14 +871,9 @@ export default function Sidebar({
       if (!project) return;
       const shell = ensureProjectShell(project.id, defaultProjectShellConfig(project));
       setActiveShell(project.id, shell.id);
-      await navigate({
-        to: "/shells/$projectId",
-        params: {
-          projectId: project.id,
-        },
-      });
+      await openShells(project.id);
     },
-    [navigate, projects, setActiveShell],
+    [openShells, projects, setActiveShell],
   );
 
   const createAndOpenProjectShell = useCallback(
@@ -881,14 +882,9 @@ export default function Sidebar({
       if (!project) return;
       const shell = createProjectShell(project.id, defaultProjectShellConfig(project));
       setActiveShell(project.id, shell.id);
-      await navigate({
-        to: "/shells/$projectId",
-        params: {
-          projectId: project.id,
-        },
-      });
+      await openShells(project.id);
     },
-    [navigate, projects, setActiveShell],
+    [openShells, projects, setActiveShell],
   );
 
   const selectThreadFromSidebar = useCallback(
@@ -905,15 +901,10 @@ export default function Sidebar({
   const selectShellFromSidebar = useCallback(
     async (projectId: ProjectId, shellId: string) => {
       setActiveShell(projectId, shellId);
-      await navigate({
-        to: "/shells/$projectId",
-        params: {
-          projectId,
-        },
-      });
+      await openShells(projectId);
       collapseMobileSidebar();
     },
-    [collapseMobileSidebar, navigate, setActiveShell],
+    [collapseMobileSidebar, openShells, setActiveShell],
   );
 
   const createThreadFromSidebar = useCallback(
@@ -1549,8 +1540,11 @@ export default function Sidebar({
 
                         {projectShells.shells.map((shell) => {
                           const isActive =
-                            routeProjectShell.projectId === project.id &&
-                            routeProjectShell.shellId === shell.id;
+                            (routeProjectShell.projectId === project.id &&
+                              routeProjectShell.shellId === shell.id) ||
+                            (activeProjectTool === "shells" &&
+                              activeProjectToolsProjectId === project.id &&
+                              projectShells.activeShellId === shell.id);
                           const isRunning = projectShells.runningShellIds.includes(shell.id);
 
                           return (

@@ -191,7 +191,12 @@ body {
   }
 
   .project-shell-terminal[data-mobile="true"] .xterm-viewport {
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .project-shell-terminal[data-mobile="true"] .xterm .xterm-accessibility {
+    touch-action: pan-y pinch-zoom;
   }
 
   .project-shell-terminal[data-mobile="true"][data-selection-mode="true"]

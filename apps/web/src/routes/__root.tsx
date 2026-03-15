@@ -10,6 +10,7 @@ import { useEffect, useRef } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 
+import { parseAppRouteSearch } from "../appRouteSearch";
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
@@ -28,6 +29,7 @@ import { projectQueryKeys } from "../lib/projectReactQuery";
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
+  validateSearch: (search) => parseAppRouteSearch(search),
   component: RootRouteView,
   errorComponent: RootRouteErrorView,
   head: () => ({

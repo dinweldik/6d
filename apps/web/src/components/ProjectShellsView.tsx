@@ -16,8 +16,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
-  type TouchEvent as ReactTouchEvent,
 } from "react";
 
 import {
@@ -26,13 +24,11 @@ import {
   shortcutLabelForCommand,
   terminalNavigationShortcutData,
 } from "../keybindings";
-import { readTextFromClipboard, writeTextToClipboard } from "../lib/clipboard";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { cn } from "../lib/utils";
 import { useMobileViewport } from "../mobileViewport";
 import { readNativeApi } from "../nativeApi";
-import { readWrappedTerminalBlockText, resolveTouchedBufferLine } from "../projectShellMobile";
 import {
   closeProjectShell,
   createProjectShell,
@@ -53,9 +49,7 @@ import { Button } from "./ui/button";
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const DESKTOP_TERMINAL_FONT_SIZE = 12;
 const MOBILE_TERMINAL_FONT_SIZE = 15;
-const MOBILE_ACCESSORY_BAR_HEIGHT = "5.25rem";
-const MOBILE_SELECTION_LONG_PRESS_MS = 420;
-const MOBILE_SELECTION_MOVE_THRESHOLD_PX = 10;
+const TERMINAL_SCROLLBACK_LINES = 20_000;
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -135,29 +129,8 @@ function terminalThemeFromApp(): ITheme {
   };
 }
 
-function controlModifiedInput(data: string): string {
-  if (data.length !== 1) {
-    return data;
-  }
-
-  const character = data.toUpperCase();
-  if (character === "?") {
-    return "\u007f";
-  }
-
-  const code = character.charCodeAt(0);
-  if (code >= 64 && code <= 95) {
-    return String.fromCharCode(code - 64);
-  }
-
-  return data;
-}
-
 interface ShellTerminalHandle {
   focus: () => void;
-  copySelection: () => Promise<boolean>;
-  pasteFromClipboard: () => Promise<boolean>;
-  selectAll: () => boolean;
 }
 
 interface ShellTerminalViewportProps {
@@ -169,9 +142,7 @@ interface ShellTerminalViewportProps {
   autoFocus: boolean;
   isMobile: boolean;
   selectionMode: boolean;
-  onActionFeedback?: ((message: string) => void) | undefined;
   onSelectionModeChange: (open: boolean) => void;
-  transformUserInput: (data: string) => string;
 }
 
 const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewportProps>(
@@ -183,97 +154,6 @@ const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewp
     const containerRef = useRef<HTMLDivElement>(null);
     const terminalRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
-    const transformUserInputRef = useRef(props.transformUserInput);
-    const longPressTimerRef = useRef<number | null>(null);
-    const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
-    const suppressNextClickRef = useRef(false);
-    const touchScrollStateRef = useRef<{
-      startViewportY: number;
-      touchY: number;
-    } | null>(null);
-
-    useEffect(() => {
-      transformUserInputRef.current = props.transformUserInput;
-    }, [props.transformUserInput]);
-
-    const clearLongPressTimer = useCallback(() => {
-      if (longPressTimerRef.current !== null) {
-        window.clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-      longPressOriginRef.current = null;
-    }, []);
-
-    const copyTouchedBlock = useCallback(
-      async (clientY: number): Promise<boolean> => {
-        const terminal = terminalRef.current;
-        const container = containerRef.current;
-        if (!terminal || !container) {
-          return false;
-        }
-
-        const rect = container.getBoundingClientRect();
-        const line = resolveTouchedBufferLine({
-          bufferLength: terminal.buffer.active.length,
-          clientY,
-          containerHeight: rect.height,
-          containerTop: rect.top,
-          viewportRows: terminal.rows,
-          viewportY: terminal.buffer.active.viewportY,
-        });
-        if (line === null) {
-          return false;
-        }
-
-        const text = readWrappedTerminalBlockText(terminal.buffer.active, line);
-        if (text.length === 0) {
-          return false;
-        }
-
-        await writeTextToClipboard(text);
-        props.onActionFeedback?.("Copied block");
-        return true;
-      },
-      [props],
-    );
-
-    const copySelection = useCallback(async (): Promise<boolean> => {
-      const terminal = terminalRef.current;
-      if (!terminal || !terminal.hasSelection()) {
-        return false;
-      }
-
-      const text = terminal.getSelection();
-      if (text.length === 0) {
-        return false;
-      }
-
-      await writeTextToClipboard(text);
-      terminal.clearSelection();
-      props.onSelectionModeChange(false);
-      props.onActionFeedback?.("Copied selection");
-      return true;
-    }, [props]);
-
-    const pasteFromClipboard = useCallback(async (): Promise<boolean> => {
-      const terminal = terminalRef.current;
-      if (!terminal) {
-        return false;
-      }
-
-      const text = await readTextFromClipboard();
-      if (text.length === 0) {
-        return false;
-      }
-
-      props.onSelectionModeChange(false);
-      terminal.paste(text);
-      terminal.focus();
-      props.onActionFeedback?.("Pasted");
-      return true;
-    }, [props]);
-
-    useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
 
     useImperativeHandle(
       forwardedRef,
@@ -282,18 +162,8 @@ const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewp
           props.onSelectionModeChange(false);
           terminalRef.current?.focus();
         },
-        copySelection,
-        pasteFromClipboard,
-        selectAll: () => {
-          const terminal = terminalRef.current;
-          if (!terminal) {
-            return false;
-          }
-          terminal.selectAll();
-          return true;
-        },
       }),
-      [copySelection, pasteFromClipboard, props],
+      [props],
     );
 
     useEffect(() => {
@@ -317,7 +187,7 @@ const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewp
         fontSize: props.fontSize,
         lineHeight: props.fontSize >= MOBILE_TERMINAL_FONT_SIZE ? 1.28 : 1.2,
         screenReaderMode: props.isMobile,
-        scrollback: 5_000,
+        scrollback: TERMINAL_SCROLLBACK_LINES,
         theme: terminalThemeFromApp(),
       });
       terminal.loadAddon(fitAddon);
@@ -457,16 +327,11 @@ const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewp
       });
 
       const inputDisposable = terminal.onData((data) => {
-        const transformedInput = transformUserInputRef.current(data);
-        if (transformedInput.length === 0) {
-          return;
-        }
-
         void api.terminal
           .write({
             threadId: runtimeThreadId,
             terminalId: DEFAULT_TERMINAL_ID,
-            data: transformedInput,
+            data,
           })
           .catch((error) =>
             writeSystemMessage(
@@ -629,108 +494,7 @@ const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewp
       terminalRef.current?.blur();
     }, [props.selectionMode]);
 
-    const handleTerminalTouchStartCapture = useCallback(
-      (event: ReactTouchEvent<HTMLDivElement>) => {
-        clearLongPressTimer();
-        if (!props.isMobile || props.selectionMode || event.touches.length !== 1) {
-          return;
-        }
-
-        const touch = event.touches[0];
-        if (!touch) {
-          return;
-        }
-
-        longPressOriginRef.current = {
-          x: touch.clientX,
-          y: touch.clientY,
-        };
-        const touchClientY = touch.clientY;
-        touchScrollStateRef.current = {
-          startViewportY: terminalRef.current?.buffer.active.viewportY ?? 0,
-          touchY: touchClientY,
-        };
-        longPressTimerRef.current = window.setTimeout(() => {
-          suppressNextClickRef.current = true;
-          longPressTimerRef.current = null;
-          void copyTouchedBlock(touchClientY)
-            .then((copied) => {
-              if (!copied) {
-                props.onSelectionModeChange(true);
-                props.onActionFeedback?.("Drag to select, then tap Copy");
-              }
-            })
-            .catch(() => {
-              props.onSelectionModeChange(true);
-              props.onActionFeedback?.("Copy failed");
-            });
-        }, MOBILE_SELECTION_LONG_PRESS_MS);
-      },
-      [clearLongPressTimer, copyTouchedBlock, props],
-    );
-
-    const handleTerminalTouchMoveCapture = useCallback(
-      (event: ReactTouchEvent<HTMLDivElement>) => {
-        const origin = longPressOriginRef.current;
-        const touch = event.touches[0];
-        if (!origin || !touch) {
-          return;
-        }
-
-        const movedX = Math.abs(touch.clientX - origin.x);
-        const movedY = Math.abs(touch.clientY - origin.y);
-        if (
-          movedX > MOBILE_SELECTION_MOVE_THRESHOLD_PX ||
-          movedY > MOBILE_SELECTION_MOVE_THRESHOLD_PX
-        ) {
-          clearLongPressTimer();
-        }
-
-        if (props.selectionMode) {
-          return;
-        }
-
-        const terminal = terminalRef.current;
-        const scrollState = touchScrollStateRef.current;
-        const container = containerRef.current;
-        if (!terminal || !scrollState || !container) {
-          return;
-        }
-
-        const rows = terminal.rows;
-        const rect = container.getBoundingClientRect();
-        if (rows <= 0 || rect.height <= 0) {
-          return;
-        }
-
-        const deltaY = touch.clientY - scrollState.touchY;
-        if (Math.abs(deltaY) < MOBILE_SELECTION_MOVE_THRESHOLD_PX) {
-          return;
-        }
-
-        suppressNextClickRef.current = true;
-        const rowHeight = rect.height / rows;
-        const deltaRows = Math.round(deltaY / rowHeight);
-        const nextViewportY = Math.min(
-          Math.max(scrollState.startViewportY - deltaRows, 0),
-          terminal.buffer.active.baseY,
-        );
-        terminal.scrollToLine(nextViewportY);
-        event.preventDefault();
-      },
-      [clearLongPressTimer, props.selectionMode],
-    );
-
-    const handleTerminalTouchEndCapture = useCallback(() => {
-      clearLongPressTimer();
-      touchScrollStateRef.current = null;
-    }, [clearLongPressTimer]);
-
     const handleTerminalClick = useCallback(() => {
-      if (suppressNextClickRef.current) {
-        suppressNextClickRef.current = false;
-        return;
-      }
       if (props.selectionMode) {
         return;
       }
@@ -744,10 +508,6 @@ const ShellTerminalViewport = forwardRef<ShellTerminalHandle, ShellTerminalViewp
         data-mobile={props.isMobile ? "true" : "false"}
         data-selection-mode={props.selectionMode ? "true" : "false"}
         onClick={handleTerminalClick}
-        onTouchCancelCapture={handleTerminalTouchEndCapture}
-        onTouchEndCapture={handleTerminalTouchEndCapture}
-        onTouchMoveCapture={handleTerminalTouchMoveCapture}
-        onTouchStartCapture={handleTerminalTouchStartCapture}
       />
     );
   },
@@ -786,35 +546,6 @@ function ShellTabButton(props: {
   );
 }
 
-function MobileAccessoryButton(props: {
-  active?: boolean | undefined;
-  disabled?: boolean | undefined;
-  label: string;
-  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onPress: () => void;
-  tone?: "default" | "danger" | undefined;
-}) {
-  return (
-    <Button
-      aria-pressed={props.active}
-      className={cn(
-        "h-12 min-w-[5.5rem] shrink-0 rounded-none before:rounded-none text-sm font-semibold",
-        props.active && "border-primary bg-primary text-primary-foreground",
-        props.tone === "danger" &&
-          !props.active &&
-          "border-destructive/30 text-destructive-foreground hover:border-destructive/40 hover:bg-destructive/6",
-      )}
-      disabled={props.disabled}
-      size="sm"
-      variant={props.active ? "default" : "outline"}
-      onClick={props.onPress}
-      onPointerDown={props.onPointerDown}
-    >
-      {props.label}
-    </Button>
-  );
-}
-
 function DesktopShellTabButton(props: {
   isActive: boolean;
   isRunning: boolean;
@@ -845,9 +576,11 @@ function DesktopShellTabButton(props: {
 }
 
 export default function ProjectShellsView({
+  navigationMode = "route",
   project,
   shellId = null,
 }: {
+  navigationMode?: "embedded" | "route";
   project: Project;
   shellId?: string | null;
 }) {
@@ -864,10 +597,7 @@ export default function ProjectShellsView({
     ...serverConfigQueryOptions(),
     select: (config) => config.keybindings,
   });
-  const [mobileCtrlLatched, setMobileCtrlLatched] = useState(false);
   const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
-  const [mobileActionNotice, setMobileActionNotice] = useState<string | null>(null);
-  const mobileActionNoticeTimerRef = useRef<number | null>(null);
 
   const activeShell = useMemo(() => {
     if (shellId) {
@@ -919,31 +649,8 @@ export default function ProjectShellsView({
   }, [activeShellId, collection.activeShellId, project.id, setActiveShell]);
 
   useEffect(() => {
-    setMobileCtrlLatched(false);
     setMobileSelectionMode(false);
-    setMobileActionNotice(null);
   }, [activeShellId]);
-
-  useEffect(
-    () => () => {
-      if (mobileActionNoticeTimerRef.current !== null) {
-        window.clearTimeout(mobileActionNoticeTimerRef.current);
-        mobileActionNoticeTimerRef.current = null;
-      }
-    },
-    [],
-  );
-
-  const showMobileActionNotice = useCallback((message: string) => {
-    setMobileActionNotice(message);
-    if (mobileActionNoticeTimerRef.current !== null) {
-      window.clearTimeout(mobileActionNoticeTimerRef.current);
-    }
-    mobileActionNoticeTimerRef.current = window.setTimeout(() => {
-      setMobileActionNotice(null);
-      mobileActionNoticeTimerRef.current = null;
-    }, 1_400);
-  }, []);
 
   const focusTerminal = useCallback(() => {
     terminalHandleRef.current?.focus();
@@ -951,6 +658,10 @@ export default function ProjectShellsView({
 
   const openProjectShellPage = useCallback(
     async (replace = false) => {
+      if (navigationMode === "embedded") {
+        return;
+      }
+
       await navigate({
         to: "/shells/$projectId",
         params: {
@@ -959,7 +670,7 @@ export default function ProjectShellsView({
         ...(replace ? { replace: true } : {}),
       });
     },
-    [navigate, project.id],
+    [navigate, navigationMode, project.id],
   );
 
   const openShell = useCallback(
@@ -1028,48 +739,6 @@ export default function ProjectShellsView({
     await writeToActiveShell("\u0003");
   }, [writeToActiveShell]);
 
-  const pasteClipboardIntoShell = useCallback(async () => {
-    try {
-      const pasted = await terminalHandleRef.current?.pasteFromClipboard();
-      if (!pasted) {
-        showMobileActionNotice("Clipboard is empty");
-      }
-    } catch {
-      showMobileActionNotice("Paste failed");
-    }
-  }, [showMobileActionNotice]);
-
-  const copySelectedShellText = useCallback(async () => {
-    try {
-      const copied = await terminalHandleRef.current?.copySelection();
-      if (!copied) {
-        showMobileActionNotice("Select text first");
-      }
-    } catch {
-      showMobileActionNotice("Copy failed");
-    }
-  }, [showMobileActionNotice]);
-
-  const selectAllShellText = useCallback(() => {
-    const selected = terminalHandleRef.current?.selectAll();
-    if (!selected) {
-      showMobileActionNotice("Nothing to select");
-      return;
-    }
-    showMobileActionNotice("Selected all");
-  }, [showMobileActionNotice]);
-
-  const transformUserInput = useCallback(
-    (data: string) => {
-      if (!mobileViewport.isMobile || !mobileCtrlLatched) {
-        return data;
-      }
-      setMobileCtrlLatched(false);
-      return controlModifiedInput(data);
-    },
-    [mobileCtrlLatched, mobileViewport.isMobile],
-  );
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) {
@@ -1112,90 +781,6 @@ export default function ProjectShellsView({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [activeShell, closeActiveShell, createShellAndOpen, focusTerminal, keybindings]);
-
-  const keepKeyboardOpenOnPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!mobileViewport.isMobile) {
-        return;
-      }
-      event.preventDefault();
-    },
-    [mobileViewport.isMobile],
-  );
-
-  const mobileAccessoryButtons = activeShell
-    ? mobileSelectionMode
-      ? [
-          {
-            label: "Copy",
-            onPress: () => {
-              void copySelectedShellText();
-            },
-          },
-          {
-            label: "Select all",
-            onPress: () => {
-              selectAllShellText();
-            },
-          },
-          {
-            active: true,
-            label: "Done",
-            onPress: () => {
-              setMobileSelectionMode(false);
-              focusTerminal();
-            },
-          },
-        ]
-      : [
-          {
-            label: "Stop",
-            onPress: () => {
-              void interruptActiveShell();
-            },
-            tone: "danger" as const,
-          },
-          {
-            label: "Paste",
-            onPress: () => {
-              void pasteClipboardIntoShell();
-            },
-          },
-          {
-            active: mobileCtrlLatched,
-            label: "Ctrl",
-            onPress: () => {
-              setMobileCtrlLatched((current) => !current);
-              focusTerminal();
-            },
-          },
-          {
-            label: "↑",
-            onPress: () => {
-              void writeToActiveShell("\u001b[A");
-            },
-          },
-          {
-            label: "Tab",
-            onPress: () => {
-              void writeToActiveShell("\t");
-            },
-          },
-          {
-            label: "Esc",
-            onPress: () => {
-              void writeToActiveShell("\u001b");
-            },
-          },
-          {
-            label: "Select",
-            onPress: () => {
-              setMobileSelectionMode(true);
-              showMobileActionNotice("Drag to select, then tap Copy");
-            },
-          },
-        ]
-    : [];
 
   if (!mobileViewport.isMobile) {
     return (
@@ -1329,7 +914,6 @@ export default function ProjectShellsView({
                 runtimeEnv={activeShell.env}
                 selectionMode={false}
                 shellId={activeShell.id}
-                transformUserInput={transformUserInput}
                 onSelectionModeChange={() => undefined}
               />
             ) : (
@@ -1392,6 +976,34 @@ export default function ProjectShellsView({
               <PlusIcon className="size-4" />
             </Button>
             <Button
+              className="rounded-none before:rounded-none"
+              disabled={!activeShell}
+              size="xs"
+              variant="destructive-outline"
+              onClick={() => {
+                void interruptActiveShell();
+              }}
+            >
+              Stop
+            </Button>
+            <Button
+              aria-pressed={mobileSelectionMode}
+              className="rounded-none before:rounded-none"
+              disabled={!activeShell}
+              size="xs"
+              variant={mobileSelectionMode ? "secondary" : "outline"}
+              onClick={() => {
+                if (mobileSelectionMode) {
+                  setMobileSelectionMode(false);
+                  focusTerminal();
+                  return;
+                }
+                setMobileSelectionMode(true);
+              }}
+            >
+              {mobileSelectionMode ? "Done" : "Select"}
+            </Button>
+            <Button
               aria-label={
                 closeShellShortcutLabel
                   ? `Delete active shell (${closeShellShortcutLabel})`
@@ -1432,16 +1044,7 @@ export default function ProjectShellsView({
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <section
-          className="flex min-h-0 flex-1 flex-col"
-          style={
-            activeShell
-              ? {
-                  paddingBottom: `calc(${MOBILE_ACCESSORY_BAR_HEIGHT} + var(--app-mobile-bottom-nav-height, 0px) + var(--safe-area-inset-bottom))`,
-                }
-              : undefined
-          }
-        >
+        <section className="flex min-h-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1 overflow-hidden border border-white/8 bg-card/70 backdrop-blur-sm rounded-none border-r-0 border-l-0 shadow-none">
             {activeShell ? (
               <ShellTerminalViewport
@@ -1454,8 +1057,6 @@ export default function ProjectShellsView({
                 runtimeEnv={activeShell.env}
                 selectionMode={mobileSelectionMode}
                 shellId={activeShell.id}
-                transformUserInput={transformUserInput}
-                onActionFeedback={showMobileActionNotice}
                 onSelectionModeChange={setMobileSelectionMode}
               />
             ) : (
@@ -1480,34 +1081,6 @@ export default function ProjectShellsView({
           </div>
         </section>
       </div>
-
-      {activeShell ? (
-        <div
-          className="fixed inset-x-0 z-30 border-border/70 border-t bg-background/92 backdrop-blur-xl"
-          style={{
-            bottom:
-              "calc(var(--app-mobile-keyboard-inset) + var(--app-mobile-bottom-nav-height, 0px))",
-          }}
-        >
-          {mobileActionNotice ? (
-            <div className="px-3 pt-2 text-center text-[11px] font-medium text-muted-foreground/80">
-              {mobileActionNotice}
-            </div>
-          ) : null}
-          <div className="turn-chip-strip flex gap-2 overflow-x-auto px-3 py-2 pb-[calc(var(--safe-area-inset-bottom)+0.5rem)]">
-            {mobileAccessoryButtons.map((button) => (
-              <MobileAccessoryButton
-                key={button.label}
-                active={button.active}
-                label={button.label}
-                tone={button.tone}
-                onPointerDown={keepKeyboardOpenOnPointerDown}
-                onPress={button.onPress}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

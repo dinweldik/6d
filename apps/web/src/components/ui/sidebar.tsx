@@ -359,7 +359,7 @@ function SidebarRail({
   const resolvedResizable = sidebarInstance?.resizable ?? null;
   const canResize = resolvedResizable !== null && open;
   const railLabel = canResize ? "Resize Sidebar" : "Toggle Sidebar";
-  const railTitle = canResize ? "Drag to resize sidebar" : "Toggle Sidebar";
+  const railTitle = canResize ? "Click to close or drag to resize sidebar" : "Toggle Sidebar";
 
   const stopResize = React.useCallback(
     (pointerId: number) => {
@@ -528,13 +528,9 @@ function SidebarRail({
         event.preventDefault();
         return;
       }
-      if (resolvedResizable && open) {
-        event.preventDefault();
-        return;
-      }
       toggleSidebar();
     },
-    [onClick, open, resolvedResizable, toggleSidebar],
+    [onClick, toggleSidebar],
   );
 
   React.useEffect(() => {

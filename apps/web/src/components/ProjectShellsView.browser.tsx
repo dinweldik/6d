@@ -11,8 +11,6 @@ import type { Project } from "../types";
 import ProjectShellsView from "./ProjectShellsView";
 
 const navigateMock = vi.fn();
-const readTextFromClipboardMock = vi.fn<() => Promise<string>>();
-const writeTextToClipboardMock = vi.fn<(text: string) => Promise<void>>();
 const terminalOpenMock = vi.fn();
 const terminalWriteMock = vi.fn();
 const terminalResizeMock = vi.fn();
@@ -34,11 +32,6 @@ vi.mock("../mobileViewport", () => ({
     keyboardInset: 0,
     viewportHeight: 932,
   }),
-}));
-
-vi.mock("../lib/clipboard", () => ({
-  readTextFromClipboard: () => readTextFromClipboardMock(),
-  writeTextToClipboard: (text: string) => writeTextToClipboardMock(text),
 }));
 
 vi.mock("../nativeApi", () => ({
@@ -200,8 +193,6 @@ describe("ProjectShellsView mobile shell", () => {
     document.body.innerHTML = "";
     localStorage.clear();
     navigateMock.mockReset();
-    readTextFromClipboardMock.mockReset();
-    writeTextToClipboardMock.mockReset();
     terminalOpenMock.mockReset();
     terminalWriteMock.mockReset();
     terminalResizeMock.mockReset();
@@ -246,59 +237,54 @@ describe("ProjectShellsView mobile shell", () => {
     document.body.innerHTML = "";
   });
 
-  it("renders the mobile accessory actions and sends control sequences", async () => {
+  it("renders the simplified mobile shell controls and sends stop", async () => {
     const mounted = await mountView();
 
     try {
       await (await waitForButton("Stop")).click();
-      await (await waitForButton("↑")).click();
-      await (await waitForButton("Tab")).click();
-      await (await waitForButton("Esc")).click();
 
       await vi.waitFor(
         () => {
           expect(terminalWriteMock).toHaveBeenCalledWith(
             expect.objectContaining({ data: "\u0003" }),
           );
-          expect(terminalWriteMock).toHaveBeenCalledWith(
-            expect.objectContaining({ data: "\u001b[A" }),
-          );
-          expect(terminalWriteMock).toHaveBeenCalledWith(expect.objectContaining({ data: "\t" }));
-          expect(terminalWriteMock).toHaveBeenCalledWith(
-            expect.objectContaining({ data: "\u001b" }),
-          );
         },
         { timeout: 5_000, interval: 16 },
       );
+
+      expect(document.body.textContent).not.toContain("Paste");
+      expect(document.body.textContent).not.toContain("Ctrl");
+      expect(document.body.textContent).not.toContain("Tab");
+      expect(document.body.textContent).not.toContain("Esc");
     } finally {
       await mounted.cleanup();
     }
   });
 
-  it("pastes from the clipboard and toggles into selection actions", async () => {
-    readTextFromClipboardMock.mockResolvedValue("printf 'mobile paste'");
+  it("toggles native selection mode from the header", async () => {
     const mounted = await mountView();
 
     try {
-      await (await waitForButton("Paste")).click();
+      await (await waitForButton("Select")).click();
+
       await vi.waitFor(
         () => {
-          expect(readTextFromClipboardMock).toHaveBeenCalledTimes(1);
-          expect(terminalWriteMock).toHaveBeenCalledWith(
-            expect.objectContaining({ data: "printf 'mobile paste'" }),
-          );
+          expect(
+            document.querySelector(".project-shell-terminal")?.getAttribute("data-selection-mode"),
+          ).toBe("true");
+          expect(document.body.textContent).toContain("Done");
         },
         { timeout: 5_000, interval: 16 },
       );
 
-      await (await waitForButton("Select")).click();
+      await (await waitForButton("Done")).click();
 
       await vi.waitFor(
-        async () => {
-          expect(await waitForButton("Copy")).toBeTruthy();
-          expect(await waitForButton("Select all")).toBeTruthy();
-          expect(await waitForButton("Done")).toBeTruthy();
-          expect(document.body.textContent).toContain("Drag to select, then tap Copy");
+        () => {
+          expect(
+            document.querySelector(".project-shell-terminal")?.getAttribute("data-selection-mode"),
+          ).toBe("false");
+          expect(document.body.textContent).toContain("Select");
         },
         { timeout: 5_000, interval: 16 },
       );
